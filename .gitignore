@@ -1,0 +1,17 @@
+.venv/
+node_modules/
+dist/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+*.tsbuildinfo
+vite.config.d.ts
+
+backend/data/training_samples/
+
+models/*.onnx
+
+.env
+.env.*
+!.env.example
