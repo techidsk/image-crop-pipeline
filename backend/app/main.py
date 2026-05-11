@@ -1,5 +1,9 @@
 import json
+import base64
+from datetime import datetime
 from io import BytesIO
+from pathlib import Path
+from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,10 +12,17 @@ from pydantic import ValidationError
 
 from .cropping import make_crop
 from .pose import make_pose_provider
+from .batch_store import append_batch_job, load_batch_jobs
 from .preset_store import load_presets, save_presets
+from .scene_store import load_scenes, save_scenes
 from .schemas import (
+    BatchJob,
+    BatchJobImage,
+    BatchJobResponse,
     BatchProcessResponse,
+    CropResult,
     CropPreset,
+    CropScene,
     PoseAnalysis,
     PoseAnalysisBatchResponse,
     ProcessResponse,
@@ -74,6 +85,12 @@ def pose_confidence(keypoints) -> float:
     return sorted(point.confidence for point in points)[len(points) // 2]
 
 
+def safe_filename(value: str) -> str:
+    stem = Path(value or "image").stem
+    safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in stem)
+    return safe or "image"
+
+
 @app.get("/api/pose-providers")
 def get_pose_providers() -> dict[str, object]:
     return {
@@ -93,6 +110,21 @@ def get_presets() -> list[CropPreset]:
 @app.put("/api/presets", response_model=list[CropPreset])
 def put_presets(presets: list[CropPreset]) -> list[CropPreset]:
     return save_presets(presets)
+
+
+@app.get("/api/scenes", response_model=list[CropScene])
+def get_scenes() -> list[CropScene]:
+    return load_scenes()
+
+
+@app.put("/api/scenes", response_model=list[CropScene])
+def put_scenes(scenes: list[CropScene]) -> list[CropScene]:
+    return save_scenes(scenes)
+
+
+@app.get("/api/batch-jobs", response_model=list[BatchJob])
+def get_batch_jobs() -> list[BatchJob]:
+    return load_batch_jobs()
 
 
 def parse_presets(raw_presets: str) -> list[CropPreset]:
@@ -126,6 +158,24 @@ async def process_upload(
         keypoints=pose.keypoints,
         crops=crops,
     )
+
+
+async def process_upload_to_output_dir(
+    image: UploadFile,
+    crop_presets: list[CropPreset],
+    output_dir: Path,
+    provider_name: str | None = None,
+) -> ProcessResponse:
+    response = await process_upload(image, crop_presets, provider_name)
+    source_name = safe_filename(response.filename or image.filename or "image")
+    next_crops: list[CropResult] = []
+    for crop in response.crops:
+        preset_dir = output_dir / safe_filename(crop.presetId)
+        preset_dir.mkdir(parents=True, exist_ok=True)
+        output_path = preset_dir / f"{source_name}_{safe_filename(crop.presetId)}.png"
+        output_path.write_bytes(base64.b64decode(crop.image))
+        next_crops.append(crop.model_copy(update={"outputPath": str(output_path)}))
+    return response.model_copy(update={"crops": next_crops})
 
 
 async def analyze_upload(image: UploadFile, provider_name: str | None = None) -> PoseAnalysis:
@@ -246,6 +296,69 @@ async def process_batch(
     return BatchProcessResponse(
         images=[await process_upload(image, crop_presets, pose_provider) for image in images]
     )
+
+
+@app.post("/api/batch-jobs/run", response_model=BatchJobResponse)
+async def run_batch_job(
+    images: list[UploadFile] = File(...),
+    scene_id: str = Form(...),
+    output_dir: str = Form(...),
+    pose_provider: str = Form("rtmw"),
+) -> BatchJobResponse:
+    scenes = load_scenes()
+    scene = next((item for item in scenes if item.id == scene_id), None)
+    if scene is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+
+    presets_by_id = {preset.id: preset for preset in load_presets()}
+    bound_ids = [
+        binding.presetId
+        for binding in scene.presets
+        if binding.enabled
+    ] or scene.presetIds
+    crop_presets = [presets_by_id[preset_id] for preset_id in bound_ids if preset_id in presets_by_id]
+    if not crop_presets:
+        raise HTTPException(status_code=400, detail="Scene has no available presets")
+
+    target_dir = Path(output_dir).expanduser()
+    if not target_dir.is_absolute():
+        target_dir = Path.cwd() / target_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+    job_dir = target_dir / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+
+    results: list[ProcessResponse] = []
+    image_reports: list[BatchJobImage] = []
+    for image in images:
+        try:
+            result = await process_upload_to_output_dir(image, crop_presets, job_dir, pose_provider)
+            results.append(result)
+            image_reports.append(
+                BatchJobImage(filename=image.filename or "image", outputs=len(result.crops))
+            )
+        except HTTPException as exc:
+            image_reports.append(
+                BatchJobImage(filename=image.filename or "image", outputs=0, error=str(exc.detail))
+            )
+
+    output_count = sum(len(result.crops) for result in results)
+    job = append_batch_job(
+        BatchJob(
+            id=job_id,
+            sceneId=scene.id,
+            sceneName=scene.name,
+            poseProvider=resolve_pose_provider_name(pose_provider),
+            outputDir=str(job_dir),
+            imageCount=len(images),
+            outputCount=output_count,
+            status="completed" if output_count > 0 else "failed",
+            createdAt=datetime.now().isoformat(timespec="seconds"),
+            images=image_reports,
+        )
+    )
+    return BatchJobResponse(job=job, images=results)
 
 
 @app.post("/api/analyze-poses", response_model=PoseAnalysisBatchResponse)

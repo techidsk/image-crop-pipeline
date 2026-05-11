@@ -40,6 +40,7 @@ class CropResult(BaseModel):
     height: int
     box: CropBox
     image: str
+    outputPath: str | None = None
 
 
 class ProcessResponse(BaseModel):
@@ -85,3 +86,44 @@ class TrainingSample(BaseModel):
 
 class TrainingSampleBatchResponse(BaseModel):
     samples: list[TrainingSample]
+
+
+class ScenePresetBinding(BaseModel):
+    presetId: str
+    enabled: bool = True
+    alias: str = ""
+
+
+class CropScene(BaseModel):
+    id: str
+    name: str
+    brand: str = ""
+    tags: list[str] = []
+    description: str = ""
+    presetIds: list[str] = []
+    presets: list[ScenePresetBinding] = []
+    status: str = "draft"
+
+
+class BatchJobImage(BaseModel):
+    filename: str
+    outputs: int
+    error: str = ""
+
+
+class BatchJob(BaseModel):
+    id: str
+    sceneId: str
+    sceneName: str
+    poseProvider: str
+    outputDir: str
+    imageCount: int
+    outputCount: int
+    status: str
+    createdAt: str
+    images: list[BatchJobImage] = []
+
+
+class BatchJobResponse(BaseModel):
+    job: BatchJob
+    images: list[ProcessResponse]

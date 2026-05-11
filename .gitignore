@@ -1,6 +1,7 @@
 .venv/
 node_modules/
 dist/
+outputs/
 .pytest_cache/
 __pycache__/
 *.py[cod]

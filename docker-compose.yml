@@ -1,0 +1,34 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: image-crop-backend
+    environment:
+      POSE_PROVIDER: ${POSE_PROVIDER:-rtmw}
+      RTMW_ONNX_PATH: ${RTMW_ONNX_PATH:-models/rtmw-l-384x288.onnx}
+      RTMW_INPUT_WIDTH: ${RTMW_INPUT_WIDTH:-288}
+      RTMW_INPUT_HEIGHT: ${RTMW_INPUT_HEIGHT:-384}
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./models:/app/models:ro
+      - ./outputs:/app/outputs
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    container_name: image-crop-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8080}:80"

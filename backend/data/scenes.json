@@ -1,0 +1,17 @@
+[
+  {
+    "id": "default-brand-scene",
+    "name": "默认品牌批量裁图",
+    "brand": "通用",
+    "tags": [
+      "default"
+    ],
+    "description": "按当前可用预设批量生成运营素材。",
+    "presetIds": [
+      "portrait-1800-2000",
+      "upper-square-1600"
+    ],
+    "presets": [],
+    "status": "draft"
+  }
+]

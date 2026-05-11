@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchPresets, persistPresets } from "./api/presets";
+import { fetchBatchJobs, fetchPresets, fetchScenes, persistPresets, persistScenes } from "./api/presets";
 import { Sidebar } from "./components/Sidebar";
 import { defaultPresets } from "./constants";
 import { BatchPage } from "./pages/BatchPage";
+import { BatchJobsPage } from "./pages/BatchJobsPage";
 import { PresetEditorPage } from "./pages/PresetEditorPage";
 import { PresetListPage } from "./pages/PresetListPage";
-import type { AppView, CropPreset, PoseProviderId } from "./types";
+import { SceneListPage } from "./pages/SceneListPage";
+import type { AppView, BatchJob, CropPreset, CropScene, PoseProviderId } from "./types";
 
 export function App() {
   const [view, setView] = useState<AppView>("batch");
   const [presets, setPresets] = useState<CropPreset[]>(defaultPresets);
+  const [scenes, setScenes] = useState<CropScene[]>([]);
+  const [jobs, setJobs] = useState<BatchJob[]>([]);
   const [poseProvider, setPoseProvider] = useState<PoseProviderId>("rtmw");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [editingPresetId, setEditingPresetId] = useState(defaultPresets[0].id);
@@ -17,6 +21,8 @@ export function App() {
 
   useEffect(() => {
     void loadPresets();
+    void loadScenes();
+    void loadJobs();
   }, []);
 
   const allTags = useMemo(
@@ -41,11 +47,36 @@ export function App() {
     }
   };
 
+  const loadScenes = async () => {
+    try {
+      setScenes(await fetchScenes());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "场景加载失败");
+    }
+  };
+
+  const loadJobs = async () => {
+    try {
+      setJobs(await fetchBatchJobs());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "任务记录加载失败");
+    }
+  };
+
   const savePresets = async (nextPresets: CropPreset[]) => {
     setPresets(nextPresets);
     const saved = await persistPresets(nextPresets);
     setPresets(saved);
     setEditingPresetId((current) => saved.find((preset) => preset.id === current)?.id ?? saved[0]?.id ?? "");
+  };
+
+  const saveScenes = async (nextScenes: CropScene[]) => {
+    setScenes(nextScenes);
+    try {
+      setScenes(await persistScenes(nextScenes));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "场景保存失败");
+    }
   };
 
   const updatePreset = (id: string, patch: Partial<CropPreset>) => {
@@ -125,6 +156,21 @@ export function App() {
                 current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
               )
             }
+          />
+        )}
+        {view === "batchJobs" && (
+          <BatchJobsPage
+            scenes={scenes}
+            jobs={jobs}
+            poseProvider={poseProvider}
+            onJobCreated={(job) => setJobs((current) => [job, ...current])}
+          />
+        )}
+        {view === "sceneList" && (
+          <SceneListPage
+            scenes={scenes}
+            presets={presets}
+            onSave={(nextScenes) => void saveScenes(nextScenes)}
           />
         )}
         {view === "presetList" && (

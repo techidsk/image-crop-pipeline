@@ -1,4 +1,4 @@
-export type AppView = "batch" | "presetList" | "presetEditor";
+export type AppView = "batch" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
 export type PoseProviderId = "rtmw" | "heuristic";
 
 export type CropStrategy = "anchor_center" | "anchor_top" | "full_height" | "learned_composition" | "pose_semantic_composition";
@@ -47,6 +47,7 @@ export type CropResult = {
   height: number;
   box: { left: number; top: number; right: number; bottom: number };
   image: string;
+  outputPath?: string | null;
 };
 
 export type ProcessResponse = {
@@ -83,3 +84,39 @@ export type CropDragState =
     };
 
 export type ResizeHandle = "n" | "e" | "s" | "w" | "ne" | "se" | "sw" | "nw";
+
+export type ScenePresetBinding = {
+  presetId: string;
+  enabled: boolean;
+  alias: string;
+};
+
+export type CropScene = {
+  id: string;
+  name: string;
+  brand: string;
+  tags: string[];
+  description: string;
+  presetIds: string[];
+  presets: ScenePresetBinding[];
+  status: "draft" | "active" | "archived";
+};
+
+export type BatchJobImage = {
+  filename: string;
+  outputs: number;
+  error: string;
+};
+
+export type BatchJob = {
+  id: string;
+  sceneId: string;
+  sceneName: string;
+  poseProvider: string;
+  outputDir: string;
+  imageCount: number;
+  outputCount: number;
+  status: "completed" | "failed" | "running";
+  createdAt: string;
+  images: BatchJobImage[];
+};

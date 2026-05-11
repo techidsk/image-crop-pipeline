@@ -16,6 +16,7 @@ export function CropCard({ filename, crop }: CropCardProps) {
         <span>
           {safeName} · {crop.width}x{crop.height} · L{crop.box.left} T{crop.box.top}
         </span>
+        {crop.outputPath && <span>{crop.outputPath}</span>}
       </div>
       <a href={`data:image/png;base64,${crop.image}`} download={`${safeName}_${crop.presetId}.png`} aria-label={`Download ${crop.name}`}>
         <Download size={16} />

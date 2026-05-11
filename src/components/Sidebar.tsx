@@ -1,4 +1,4 @@
-import { Layers3, Scissors } from "lucide-react";
+import { BriefcaseBusiness, Layers3, Scissors, Workflow } from "lucide-react";
 import type { AppView, PoseProviderId } from "../types";
 
 type SidebarProps = {
@@ -24,7 +24,15 @@ export function Sidebar({ view, error, poseProvider, onNavigate, onPoseProviderC
           <Scissors size={17} />
           <span>批量处理</span>
         </button>
-        <button className={view !== "batch" ? "active" : ""} onClick={() => onNavigate("presetList")}>
+        <button className={view === "batchJobs" ? "active" : ""} onClick={() => onNavigate("batchJobs")}>
+          <Workflow size={17} />
+          <span>批量任务</span>
+        </button>
+        <button className={view === "sceneList" ? "active" : ""} onClick={() => onNavigate("sceneList")}>
+          <BriefcaseBusiness size={17} />
+          <span>场景管理</span>
+        </button>
+        <button className={view === "presetList" || view === "presetEditor" ? "active" : ""} onClick={() => onNavigate("presetList")}>
           <Layers3 size={17} />
           <span>预设管理</span>
         </button>

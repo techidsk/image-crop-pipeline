@@ -1,4 +1,4 @@
-import type { CropPreset } from "../types";
+import type { BatchJob, CropPreset, CropScene } from "../types";
 
 export async function fetchPresets() {
   const response = await fetch("/api/presets");
@@ -17,4 +17,29 @@ export async function persistPresets(presets: CropPreset[]) {
     throw new Error(body.detail ?? "预设保存失败");
   }
   return (await response.json()) as CropPreset[];
+}
+
+export async function fetchScenes() {
+  const response = await fetch("/api/scenes");
+  if (!response.ok) throw new Error("场景加载失败");
+  return (await response.json()) as CropScene[];
+}
+
+export async function persistScenes(scenes: CropScene[]) {
+  const response = await fetch("/api/scenes", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(scenes)
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail ?? "场景保存失败");
+  }
+  return (await response.json()) as CropScene[];
+}
+
+export async function fetchBatchJobs() {
+  const response = await fetch("/api/batch-jobs");
+  if (!response.ok) throw new Error("任务记录加载失败");
+  return (await response.json()) as BatchJob[];
 }
