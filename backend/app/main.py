@@ -1,17 +1,20 @@
 import json
 import base64
+import os
+import subprocess
+import sys
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
 
 from .cropping import make_crop
-from .pose import make_pose_provider
+from .pose import Pose, classify_pose_view, make_pose_provider
 from .batch_store import append_batch_job, load_batch_jobs
 from .preset_store import load_presets, save_presets
 from .scene_store import load_scenes, save_scenes
@@ -42,6 +45,7 @@ from .training_store import (
 )
 
 app = FastAPI(title="OpenPose Crop Pipeline")
+POSE_DETECT_MAX_SIDE = int(os.getenv("POSE_DETECT_MAX_SIDE", "1280"))
 pose_providers = {"heuristic": make_pose_provider("heuristic")}
 try:
     pose_providers["rtmw"] = make_pose_provider("rtmw")
@@ -91,6 +95,38 @@ def safe_filename(value: str) -> str:
     return safe or "image"
 
 
+def ndjson_event(payload: dict[str, object]) -> str:
+    return json.dumps(payload, ensure_ascii=False) + "\n"
+
+
+def detect_pose(provider_name: str, source_image: Image.Image) -> Pose:
+    provider = pose_providers[provider_name]
+    max_side = max(source_image.width, source_image.height)
+    if max_side <= POSE_DETECT_MAX_SIDE:
+        return provider.detect(source_image)
+
+    scale = POSE_DETECT_MAX_SIDE / max_side
+    detect_size = (
+        max(1, round(source_image.width * scale)),
+        max(1, round(source_image.height * scale)),
+    )
+    detect_image = source_image.resize(detect_size, Image.Resampling.BILINEAR)
+    pose = provider.detect(detect_image)
+    scale_x = source_image.width / detect_image.width
+    scale_y = source_image.height / detect_image.height
+    return Pose(
+        keypoints=[
+            point.model_copy(
+                update={
+                    "x": point.x * scale_x,
+                    "y": point.y * scale_y,
+                }
+            )
+            for point in pose.keypoints
+        ]
+    )
+
+
 @app.get("/api/pose-providers")
 def get_pose_providers() -> dict[str, object]:
     return {
@@ -127,11 +163,39 @@ def get_batch_jobs() -> list[BatchJob]:
     return load_batch_jobs()
 
 
+@app.post("/api/batch-jobs/{job_id}/open-output")
+def open_batch_job_output(job_id: str) -> dict[str, str]:
+    job = next((item for item in load_batch_jobs() if item.id == job_id), None)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+    output_path = Path(job.outputDir)
+    if not output_path.exists() or not output_path.is_dir():
+        raise HTTPException(status_code=404, detail="Output directory not found")
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(output_path)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(output_path)])
+        else:
+            subprocess.Popen(["xdg-open", str(output_path)])
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=f"Cannot open output directory: {exc}") from exc
+    return {"status": "ok", "path": str(output_path)}
+
+
 def parse_presets(raw_presets: str) -> list[CropPreset]:
     try:
         return [CropPreset.model_validate(item) for item in json.loads(raw_presets)]
     except (json.JSONDecodeError, TypeError, ValidationError) as exc:
         raise HTTPException(status_code=400, detail="Invalid crop presets") from exc
+
+
+def presets_for_view(crop_presets: list[CropPreset], view_angle: str) -> list[CropPreset]:
+    return [
+        preset
+        for preset in crop_presets
+        if not preset.viewAngles or view_angle in preset.viewAngles
+    ]
 
 
 async def process_upload(
@@ -146,15 +210,18 @@ async def process_upload(
         raise HTTPException(status_code=400, detail="Unsupported image file") from exc
 
     actual_provider = resolve_pose_provider_name(provider_name)
-    pose = pose_providers[actual_provider].detect(source_image)
+    pose = detect_pose(actual_provider, source_image)
+    view_angle = classify_pose_view(pose)
+    matched_presets = presets_for_view(crop_presets, view_angle)
     try:
-        crops = [make_crop(source_image, pose, preset) for preset in crop_presets]
+        crops = [make_crop(source_image, pose, preset) for preset in matched_presets]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return ProcessResponse(
         filename=image.filename,
         source={"width": source_image.width, "height": source_image.height},
+        viewAngle=view_angle,
         keypoints=pose.keypoints,
         crops=crops,
     )
@@ -185,10 +252,13 @@ async def analyze_upload(image: UploadFile, provider_name: str | None = None) ->
     except (UnidentifiedImageError, OSError) as exc:
         raise HTTPException(status_code=400, detail="Unsupported image file") from exc
 
-    pose = get_pose_provider(provider_name).detect(source_image)
+    actual_provider = resolve_pose_provider_name(provider_name)
+    pose = detect_pose(actual_provider, source_image)
+    view_angle = classify_pose_view(pose)
     return PoseAnalysis(
         filename=image.filename,
         source={"width": source_image.width, "height": source_image.height},
+        viewAngle=view_angle,
         keypoints=pose.keypoints,
     )
 
@@ -207,7 +277,8 @@ async def create_training_sample(
     sample_id = make_sample_id()
     suffix = await save_upload_image(preset_id, sample_id, image, raw)
     actual_provider = resolve_pose_provider_name(provider_name)
-    pose = pose_providers[actual_provider].detect(source_image)
+    pose = detect_pose(actual_provider, source_image)
+    view_angle = classify_pose_view(pose)
     confidence = pose_confidence(pose.keypoints)
     return TrainingSample(
         id=sample_id,
@@ -215,6 +286,7 @@ async def create_training_sample(
         imageUrl=sample_image_url(preset_id, sample_id, suffix),
         source={"width": source_image.width, "height": source_image.height},
         keypoints=pose.keypoints,
+        viewAngle=view_angle,
         poseProvider=actual_provider,
         crop={
             "left": 0,
@@ -249,12 +321,14 @@ def reanalyze_training_samples(
         except (UnidentifiedImageError, OSError):
             next_samples.append(sample)
             continue
-        pose = pose_providers[actual_provider].detect(source_image)
+        pose = detect_pose(actual_provider, source_image)
+        view_angle = classify_pose_view(pose)
         next_samples.append(
             sample.model_copy(
                 update={
                     "source": {"width": source_image.width, "height": source_image.height},
                     "keypoints": pose.keypoints,
+                    "viewAngle": view_angle,
                     "poseProvider": actual_provider,
                     "confidence": pose_confidence(pose.keypoints),
                 }
@@ -305,11 +379,14 @@ async def run_batch_job(
     output_dir: str = Form(...),
     pose_provider: str = Form("rtmw"),
 ) -> BatchJobResponse:
+    job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+    created_at = datetime.now().isoformat(timespec="seconds")
     scenes = load_scenes()
     scene = next((item for item in scenes if item.id == scene_id), None)
     if scene is None:
         raise HTTPException(status_code=404, detail="Scene not found")
 
+    actual_provider = resolve_pose_provider_name(pose_provider)
     presets_by_id = {preset.id: preset for preset in load_presets()}
     bound_ids = [
         binding.presetId
@@ -318,22 +395,90 @@ async def run_batch_job(
     ] or scene.presetIds
     crop_presets = [presets_by_id[preset_id] for preset_id in bound_ids if preset_id in presets_by_id]
     if not crop_presets:
-        raise HTTPException(status_code=400, detail="Scene has no available presets")
+        job = append_batch_job(
+            BatchJob(
+                id=job_id,
+                sceneId=scene.id,
+                sceneName=scene.name,
+                poseProvider=actual_provider,
+                outputDir=output_dir,
+                imageCount=len(images),
+                outputCount=0,
+                status="failed",
+                createdAt=created_at,
+                images=[
+                    BatchJobImage(
+                        filename=image.filename or "image",
+                        outputs=0,
+                        error="场景没有可用预设，请先在场景管理中绑定预设。",
+                    )
+                    for image in images
+                ],
+            )
+        )
+        return BatchJobResponse(job=job, images=[])
 
     target_dir = Path(output_dir).expanduser()
     if not target_dir.is_absolute():
         target_dir = Path.cwd() / target_dir
-    target_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        job = append_batch_job(
+            BatchJob(
+                id=job_id,
+                sceneId=scene.id,
+                sceneName=scene.name,
+                poseProvider=actual_provider,
+                outputDir=str(target_dir),
+                imageCount=len(images),
+                outputCount=0,
+                status="failed",
+                createdAt=created_at,
+                images=[
+                    BatchJobImage(
+                        filename=image.filename or "image",
+                        outputs=0,
+                        error=f"输出目录不可写：{exc}",
+                    )
+                    for image in images
+                ],
+            )
+        )
+        return BatchJobResponse(job=job, images=[])
 
-    job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
     job_dir = target_dir / job_id
-    job_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        job_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        job = append_batch_job(
+            BatchJob(
+                id=job_id,
+                sceneId=scene.id,
+                sceneName=scene.name,
+                poseProvider=actual_provider,
+                outputDir=str(job_dir),
+                imageCount=len(images),
+                outputCount=0,
+                status="failed",
+                createdAt=created_at,
+                images=[
+                    BatchJobImage(
+                        filename=image.filename or "image",
+                        outputs=0,
+                        error=f"任务目录不可写：{exc}",
+                    )
+                    for image in images
+                ],
+            )
+        )
+        return BatchJobResponse(job=job, images=[])
 
     results: list[ProcessResponse] = []
     image_reports: list[BatchJobImage] = []
     for image in images:
         try:
-            result = await process_upload_to_output_dir(image, crop_presets, job_dir, pose_provider)
+            result = await process_upload_to_output_dir(image, crop_presets, job_dir, actual_provider)
             results.append(result)
             image_reports.append(
                 BatchJobImage(filename=image.filename or "image", outputs=len(result.crops))
@@ -349,16 +494,181 @@ async def run_batch_job(
             id=job_id,
             sceneId=scene.id,
             sceneName=scene.name,
-            poseProvider=resolve_pose_provider_name(pose_provider),
+            poseProvider=actual_provider,
             outputDir=str(job_dir),
             imageCount=len(images),
             outputCount=output_count,
             status="completed" if output_count > 0 else "failed",
-            createdAt=datetime.now().isoformat(timespec="seconds"),
+            createdAt=created_at,
             images=image_reports,
         )
     )
     return BatchJobResponse(job=job, images=results)
+
+
+@app.post("/api/batch-jobs/run-stream")
+async def run_batch_job_stream(
+    images: list[UploadFile] = File(...),
+    scene_id: str = Form(...),
+    output_dir: str = Form(...),
+    pose_provider: str = Form("rtmw"),
+) -> StreamingResponse:
+    async def events():
+        job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
+        created_at = datetime.now().isoformat(timespec="seconds")
+        total = len(images)
+        try:
+            actual_provider = resolve_pose_provider_name(pose_provider)
+            scenes = load_scenes()
+            scene = next((item for item in scenes if item.id == scene_id), None)
+            if scene is None:
+                yield ndjson_event({"type": "error", "message": "Scene not found"})
+                return
+
+            presets_by_id = {preset.id: preset for preset in load_presets()}
+            bound_ids = [
+                binding.presetId
+                for binding in scene.presets
+                if binding.enabled
+            ] or scene.presetIds
+            crop_presets = [presets_by_id[preset_id] for preset_id in bound_ids if preset_id in presets_by_id]
+            if not crop_presets:
+                job = append_batch_job(
+                    BatchJob(
+                        id=job_id,
+                        sceneId=scene.id,
+                        sceneName=scene.name,
+                        poseProvider=actual_provider,
+                        outputDir=output_dir,
+                        imageCount=total,
+                        outputCount=0,
+                        status="failed",
+                        createdAt=created_at,
+                        images=[
+                            BatchJobImage(
+                                filename=image.filename or "image",
+                                outputs=0,
+                                error="场景没有可用预设，请先在场景管理中绑定预设。",
+                            )
+                            for image in images
+                        ],
+                    )
+                )
+                yield ndjson_event({"type": "final", "job": job.model_dump(mode="json"), "images": []})
+                return
+
+            target_dir = Path(output_dir).expanduser()
+            if not target_dir.is_absolute():
+                target_dir = Path.cwd() / target_dir
+            try:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                job_dir = target_dir / job_id
+                job_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                job = append_batch_job(
+                    BatchJob(
+                        id=job_id,
+                        sceneId=scene.id,
+                        sceneName=scene.name,
+                        poseProvider=actual_provider,
+                        outputDir=str(target_dir),
+                        imageCount=total,
+                        outputCount=0,
+                        status="failed",
+                        createdAt=created_at,
+                        images=[
+                            BatchJobImage(
+                                filename=image.filename or "image",
+                                outputs=0,
+                                error=f"输出目录不可写：{exc}",
+                            )
+                            for image in images
+                        ],
+                    )
+                )
+                yield ndjson_event({"type": "final", "job": job.model_dump(mode="json"), "images": []})
+                return
+
+            yield ndjson_event(
+                {
+                    "type": "start",
+                    "jobId": job_id,
+                    "total": total,
+                    "presetCount": len(crop_presets),
+                    "outputDir": str(job_dir),
+                }
+            )
+
+            results: list[ProcessResponse] = []
+            image_reports: list[BatchJobImage] = []
+            for index, image in enumerate(images, start=1):
+                filename = image.filename or "image"
+                yield ndjson_event(
+                    {
+                        "type": "active",
+                        "jobId": job_id,
+                        "completed": index - 1,
+                        "total": total,
+                        "filename": filename,
+                    }
+                )
+                try:
+                    result = await process_upload_to_output_dir(image, crop_presets, job_dir, actual_provider)
+                    results.append(result)
+                    report = BatchJobImage(filename=filename, outputs=len(result.crops))
+                    image_reports.append(report)
+                    yield ndjson_event(
+                        {
+                            "type": "progress",
+                            "jobId": job_id,
+                            "completed": index,
+                            "total": total,
+                            "filename": filename,
+                            "outputs": len(result.crops),
+                            "result": result.model_dump(mode="json"),
+                        }
+                    )
+                except HTTPException as exc:
+                    report = BatchJobImage(filename=filename, outputs=0, error=str(exc.detail))
+                    image_reports.append(report)
+                    yield ndjson_event(
+                        {
+                            "type": "progress",
+                            "jobId": job_id,
+                            "completed": index,
+                            "total": total,
+                            "filename": filename,
+                            "outputs": 0,
+                            "error": str(exc.detail),
+                        }
+                    )
+
+            output_count = sum(len(result.crops) for result in results)
+            job = append_batch_job(
+                BatchJob(
+                    id=job_id,
+                    sceneId=scene.id,
+                    sceneName=scene.name,
+                    poseProvider=actual_provider,
+                    outputDir=str(job_dir),
+                    imageCount=total,
+                    outputCount=output_count,
+                    status="completed" if output_count > 0 else "failed",
+                    createdAt=created_at,
+                    images=image_reports,
+                )
+            )
+            yield ndjson_event(
+                {
+                    "type": "final",
+                    "job": job.model_dump(mode="json"),
+                    "images": [result.model_dump(mode="json") for result in results],
+                }
+            )
+        except Exception as exc:
+            yield ndjson_event({"type": "error", "message": str(exc)})
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")
 
 
 @app.post("/api/analyze-poses", response_model=PoseAnalysisBatchResponse)

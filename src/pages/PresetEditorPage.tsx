@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ImageUp, RefreshCw, Save, Wand2 } from "lucide-react";
+import { viewAngleLabels } from "../constants";
 import { NumberField } from "../components/NumberField";
 import { TrainingCard } from "../components/TrainingCard";
-import type { CropPreset, LearnedComposition, PoseProviderId, TrainingSample } from "../types";
+import type { CropPreset, LearnedComposition, PoseProviderId, TrainingSample, ViewAngle } from "../types";
 import {
   compositionForSample,
   filterModels,
@@ -58,6 +59,7 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
   const trainSamples = confirmedSamples.filter((sample) => sample.set === "train");
   const testSamples = confirmedSamples.filter((sample) => sample.set === "test");
   const selectedSample = samples.find((sample) => sample.id === selectedSampleId) ?? samples[0];
+  const activeViewAngles = preset.viewAngles?.length ? preset.viewAngles : viewAngles;
 
   useEffect(() => {
     void loadSavedSamples();
@@ -293,6 +295,13 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
     });
   };
 
+  const toggleViewAngle = (viewAngle: ViewAngle, checked: boolean) => {
+    const nextAngles = checked
+      ? Array.from(new Set([...activeViewAngles, viewAngle]))
+      : activeViewAngles.filter((item) => item !== viewAngle);
+    onUpdate(preset.id, { viewAngles: nextAngles.length > 0 ? nextAngles : activeViewAngles });
+  };
+
   return (
     <section className="editor-page">
       <div className="page-header">
@@ -349,6 +358,18 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
               />
               <span>不裁手</span>
             </label>
+          </div>
+          <div className="crop-guard-options" aria-label="适用视角">
+            {viewAngles.map((viewAngle) => (
+              <label className="checkbox-row" key={viewAngle}>
+                <input
+                  type="checkbox"
+                  checked={activeViewAngles.includes(viewAngle)}
+                  onChange={(event) => toggleViewAngle(viewAngle, event.target.checked)}
+                />
+                <span>{viewAngleLabels[viewAngle]}</span>
+              </label>
+            ))}
           </div>
           <div className={`preset-status ${preset.status ?? "draft"}`}>
             {preset.status === "ready" ? "正式策略" : preset.status === "incomplete" ? "残缺策略" : "草稿"}
@@ -421,7 +442,7 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
                     <span>
                       <strong>{sample.filename}</strong>
                       <small className={sample.confirmed ? "confirmed" : sample.cropPreviewUrl ? "previewed" : ""}>
-                        {sample.confirmed ? `已确认 · ${sample.set === "train" ? "训练" : "测试"}` : sample.cropPreviewUrl ? "已预览，待确认" : "待处理"} · {providerLabel(sample.poseProvider)}
+                        {sample.confirmed ? `已确认 · ${sample.set === "train" ? "训练" : "测试"}` : sample.cropPreviewUrl ? "已预览，待确认" : "待处理"} · {viewAngleLabels[sample.viewAngle ?? "front"]} · {providerLabel(sample.poseProvider)}
                       </small>
                     </span>
                   </button>
@@ -594,6 +615,7 @@ function normalizeSamples(samples: TrainingSample[]) {
     ...sample,
     imageUrl: sample.imageUrl,
     previewUrl: sample.previewUrl || sample.imageUrl,
+    viewAngle: sample.viewAngle ?? "front",
     poseProvider: sample.poseProvider ?? "unknown",
     set: sample.set ?? "train",
     confirmed: Boolean(sample.confirmed),
@@ -640,3 +662,5 @@ function providerLabel(provider: TrainingSample["poseProvider"]) {
   if (provider === "heuristic") return "旧方案";
   return "未知来源";
 }
+
+const viewAngles: ViewAngle[] = ["front", "side", "back"];

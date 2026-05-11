@@ -1,5 +1,6 @@
-export type AppView = "batch" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
+export type AppView = "batch" | "viewTest" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
 export type PoseProviderId = "rtmw" | "heuristic";
+export type ViewAngle = "front" | "side" | "back";
 
 export type CropStrategy = "anchor_center" | "anchor_top" | "full_height" | "learned_composition" | "pose_semantic_composition";
 export type PresetStatus = "draft" | "incomplete" | "ready";
@@ -38,6 +39,7 @@ export type CropPreset = {
   composition?: LearnedComposition | null;
   protectHead?: boolean;
   protectHands?: boolean;
+  viewAngles?: ViewAngle[];
   status?: PresetStatus;
   note?: string;
 };
@@ -55,11 +57,19 @@ export type CropResult = {
 export type ProcessResponse = {
   filename?: string;
   source: { width: number; height: number };
+  viewAngle: ViewAngle;
   keypoints: Array<{ name: string; x: number; y: number; confidence: number }>;
   crops: CropResult[];
 };
 
 export type PoseKeypoint = ProcessResponse["keypoints"][number];
+
+export type PoseAnalysis = {
+  filename?: string;
+  source: { width: number; height: number };
+  viewAngle: ViewAngle;
+  keypoints: PoseKeypoint[];
+};
 
 export type TrainingSample = {
   id: string;
@@ -68,6 +78,7 @@ export type TrainingSample = {
   previewUrl: string;
   source: { width: number; height: number };
   keypoints: PoseKeypoint[];
+  viewAngle?: ViewAngle;
   crop: { left: number; top: number; width: number; height: number };
   poseProvider?: PoseProviderId | "unknown";
   confidence: number;

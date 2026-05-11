@@ -1,6 +1,8 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+ViewAngle = Literal["front", "side", "back"]
 
 
 class CropPreset(BaseModel):
@@ -17,6 +19,7 @@ class CropPreset(BaseModel):
     composition: dict[str, Any] | None = None
     protectHead: bool = False
     protectHands: bool = False
+    viewAngles: list[ViewAngle] = Field(default_factory=lambda: ["front", "side", "back"])
     status: str = "draft"
     note: str = ""
 
@@ -48,6 +51,7 @@ class CropResult(BaseModel):
 class ProcessResponse(BaseModel):
     filename: str | None = None
     source: dict[str, int]
+    viewAngle: ViewAngle
     keypoints: list[PoseKeypoint]
     crops: list[CropResult]
 
@@ -59,6 +63,7 @@ class BatchProcessResponse(BaseModel):
 class PoseAnalysis(BaseModel):
     filename: str | None = None
     source: dict[str, int]
+    viewAngle: ViewAngle
     keypoints: list[PoseKeypoint]
 
 
@@ -79,6 +84,7 @@ class TrainingSample(BaseModel):
     imageUrl: str
     source: dict[str, int]
     keypoints: list[PoseKeypoint]
+    viewAngle: ViewAngle = "front"
     crop: TrainingCrop
     poseProvider: str = "unknown"
     confidence: float = 0

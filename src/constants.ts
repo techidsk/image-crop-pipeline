@@ -1,4 +1,4 @@
-import type { CropPreset, CropStrategy } from "./types";
+import type { CropPreset, CropStrategy, ViewAngle } from "./types";
 
 export const anchors = ["neck", "mid_hip", "nose", "left_hip", "right_hip"];
 
@@ -8,6 +8,12 @@ export const strategyLabels: Record<CropStrategy, string> = {
   full_height: "保留全高",
   learned_composition: "样本学习构图",
   pose_semantic_composition: "姿态语义构图"
+};
+
+export const viewAngleLabels: Record<ViewAngle, string> = {
+  front: "正面",
+  side: "侧面",
+  back: "背面"
 };
 
 export const defaultPresets: CropPreset[] = [
@@ -25,6 +31,7 @@ export const defaultPresets: CropPreset[] = [
     composition: null,
     protectHead: false,
     protectHands: false,
+    viewAngles: ["front", "side", "back"],
     status: "draft",
     note: ""
   },
@@ -42,6 +49,7 @@ export const defaultPresets: CropPreset[] = [
     composition: null,
     protectHead: false,
     protectHands: false,
+    viewAngles: ["front", "side", "back"],
     status: "draft",
     note: ""
   }

@@ -1,7 +1,8 @@
 from PIL import Image
 
 from backend.app.cropping import make_crop, person_bounds
-from backend.app.pose import HeuristicPoseProvider, Pose
+from backend.app.main import detect_pose, presets_for_view
+from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
 from backend.app.schemas import CropPreset, PoseKeypoint
 
 
@@ -190,3 +191,61 @@ def test_person_bounds_prefers_body_points_over_wholebody_extremes():
     )
 
     assert person_bounds(pose) == (100, 100, 300, 500)
+
+
+def test_classify_pose_view_front_for_balanced_face_and_body():
+    pose = HeuristicPoseProvider().detect(Image.new("RGB", (1000, 1000), "white"))
+
+    assert classify_pose_view(pose) == "front"
+
+
+def test_classify_pose_view_back_when_face_is_missing():
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="left_shoulder", x=420, y=300, confidence=0.9),
+            PoseKeypoint(name="right_shoulder", x=580, y=300, confidence=0.9),
+            PoseKeypoint(name="left_hip", x=440, y=600, confidence=0.9),
+            PoseKeypoint(name="right_hip", x=560, y=600, confidence=0.9),
+            PoseKeypoint(name="left_knee", x=450, y=780, confidence=0.9),
+            PoseKeypoint(name="right_knee", x=550, y=780, confidence=0.9),
+            PoseKeypoint(name="nose", x=500, y=220, confidence=0.02),
+        ]
+    )
+
+    assert classify_pose_view(pose) == "back"
+
+
+def test_classify_pose_view_side_for_asymmetric_body_confidence():
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="left_shoulder", x=500, y=300, confidence=0.9),
+            PoseKeypoint(name="left_hip", x=510, y=600, confidence=0.9),
+            PoseKeypoint(name="left_knee", x=520, y=780, confidence=0.9),
+            PoseKeypoint(name="right_shoulder", x=560, y=310, confidence=0.22),
+            PoseKeypoint(name="right_hip", x=570, y=610, confidence=0.2),
+            PoseKeypoint(name="right_knee", x=580, y=790, confidence=0.18),
+            PoseKeypoint(name="nose", x=500, y=220, confidence=0.8),
+            PoseKeypoint(name="left_eye", x=490, y=205, confidence=0.8),
+        ]
+    )
+
+    assert classify_pose_view(pose) == "side"
+
+
+def test_presets_for_view_keeps_matching_or_unrestricted_presets():
+    front = CropPreset(id="front", name="Front", width=100, height=100, anchor="neck", viewAngles=["front"])
+    side = CropPreset(id="side", name="Side", width=100, height=100, anchor="neck", viewAngles=["side"])
+    all_views = CropPreset(id="all", name="All", width=100, height=100, anchor="neck")
+
+    assert [preset.id for preset in presets_for_view([front, side, all_views], "side")] == ["side", "all"]
+
+
+def test_detect_pose_maps_resized_detection_back_to_source_coordinates():
+    image = Image.new("RGB", (4000, 3000), "white")
+
+    pose = detect_pose("heuristic", image)
+    nose = pose.point("nose")
+
+    assert nose is not None
+    assert nose.x == 2000
+    assert nose.y == 660

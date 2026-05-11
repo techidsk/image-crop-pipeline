@@ -7,6 +7,7 @@ import { BatchJobsPage } from "./pages/BatchJobsPage";
 import { PresetEditorPage } from "./pages/PresetEditorPage";
 import { PresetListPage } from "./pages/PresetListPage";
 import { SceneListPage } from "./pages/SceneListPage";
+import { ViewTestPage } from "./pages/ViewTestPage";
 import type { AppView, BatchJob, CropPreset, CropScene, PoseProviderId } from "./types";
 
 export function App() {
@@ -166,6 +167,7 @@ export function App() {
             onJobCreated={(job) => setJobs((current) => [job, ...current])}
           />
         )}
+        {view === "viewTest" && <ViewTestPage poseProvider={poseProvider} />}
         {view === "sceneList" && (
           <SceneListPage
             scenes={scenes}
