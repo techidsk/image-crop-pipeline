@@ -23,6 +23,8 @@ export const defaultPresets: CropPreset[] = [
     offsetY: 220,
     scale: 1,
     composition: null,
+    protectHead: false,
+    protectHands: false,
     status: "draft",
     note: ""
   },
@@ -38,6 +40,8 @@ export const defaultPresets: CropPreset[] = [
     offsetY: -180,
     scale: 1,
     composition: null,
+    protectHead: false,
+    protectHands: false,
     status: "draft",
     note: ""
   }

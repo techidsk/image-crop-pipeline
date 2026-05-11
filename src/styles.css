@@ -583,6 +583,31 @@ h2 {
   resize: vertical;
 }
 
+.crop-guard-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.checkbox-row {
+  min-height: 38px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #cfd8e1;
+  border-radius: 8px;
+  background: #f7f8f6;
+  color: #1f2933;
+}
+
+.editor-card .checkbox-row input {
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+  accent-color: #176b5b;
+}
+
 .preset-table-shell {
   overflow: auto;
   border: 1px solid #dde3e9;

@@ -104,6 +104,80 @@ def test_make_crop_uses_pose_semantic_composition():
     assert result.image
 
 
+def test_make_crop_can_protect_head_keypoints():
+    image = Image.new("RGB", (600, 600), "white")
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="neck", x=300, y=300, confidence=0.9),
+            PoseKeypoint(name="nose", x=300, y=50, confidence=0.9),
+        ]
+    )
+    preset = CropPreset(
+        id="head-safe",
+        name="Head Safe",
+        width=100,
+        height=100,
+        anchor="neck",
+        protectHead=True,
+    )
+
+    result = make_crop(image, pose, preset)
+
+    assert result.box.top <= 26
+    assert result.box.left <= 276
+    assert result.box.right >= 324
+
+
+def test_make_crop_can_protect_hand_keypoints():
+    image = Image.new("RGB", (600, 600), "white")
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="neck", x=300, y=300, confidence=0.9),
+            PoseKeypoint(name="right_hand_8", x=500, y=300, confidence=0.9),
+        ]
+    )
+    preset = CropPreset(
+        id="hand-safe",
+        name="Hand Safe",
+        width=100,
+        height=100,
+        anchor="neck",
+        protectHands=True,
+    )
+
+    result = make_crop(image, pose, preset)
+
+    assert result.box.right >= 530
+    assert result.box.top < 250
+    assert result.box.bottom > 350
+
+
+def test_make_crop_does_not_pad_beyond_source_image():
+    image = Image.new("RGB", (600, 600), "white")
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="neck", x=50, y=50, confidence=0.9),
+            PoseKeypoint(name="nose", x=10, y=10, confidence=0.9),
+        ]
+    )
+    preset = CropPreset(
+        id="no-padding",
+        name="No Padding",
+        width=300,
+        height=300,
+        anchor="neck",
+        protectHead=True,
+    )
+
+    result = make_crop(image, pose, preset)
+
+    assert result.box.left == 0
+    assert result.box.top == 0
+    assert result.box.right <= image.width
+    assert result.box.bottom <= image.height
+    assert result.image
+
+
 def test_person_bounds_prefers_body_points_over_wholebody_extremes():
     pose = Pose(
         keypoints=[

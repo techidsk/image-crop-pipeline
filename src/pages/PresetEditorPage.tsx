@@ -332,6 +332,24 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
             <NumberField label="宽" value={preset.width} onChange={(width) => onUpdate(preset.id, { width })} />
             <NumberField label="高" value={preset.height} onChange={(height) => onUpdate(preset.id, { height })} />
           </div>
+          <div className="crop-guard-options" aria-label="裁切保护约束">
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={Boolean(preset.protectHead)}
+                onChange={(event) => onUpdate(preset.id, { protectHead: event.target.checked })}
+              />
+              <span>不裁头</span>
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={Boolean(preset.protectHands)}
+                onChange={(event) => onUpdate(preset.id, { protectHands: event.target.checked })}
+              />
+              <span>不裁手</span>
+            </label>
+          </div>
           <div className={`preset-status ${preset.status ?? "draft"}`}>
             {preset.status === "ready" ? "正式策略" : preset.status === "incomplete" ? "残缺策略" : "草稿"}
           </div>

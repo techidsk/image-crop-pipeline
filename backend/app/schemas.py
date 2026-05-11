@@ -15,6 +15,8 @@ class CropPreset(BaseModel):
     offsetY: float = 0
     scale: float = Field(default=1, gt=0)
     composition: dict[str, Any] | None = None
+    protectHead: bool = False
+    protectHands: bool = False
     status: str = "draft"
     note: str = ""
 

@@ -36,6 +36,8 @@ export type CropPreset = {
   offsetY: number;
   scale: number;
   composition?: LearnedComposition | null;
+  protectHead?: boolean;
+  protectHands?: boolean;
   status?: PresetStatus;
   note?: string;
 };

@@ -1,6 +1,6 @@
 from io import BytesIO
 import base64
-from PIL import Image, ImageOps
+from PIL import Image
 
 from .pose import Pose
 from .schemas import CropBox, CropPreset, CropResult
@@ -25,6 +25,22 @@ BODY_BOUND_KEYPOINTS = {
     "left_ankle",
     "right_ankle",
 }
+
+HEAD_KEYPOINTS = {
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+}
+
+HAND_KEYPOINTS = {
+    "left_wrist",
+    "right_wrist",
+}
+
+HEAD_GUARD_MARGIN_RATIO = 0.035
+HAND_GUARD_MARGIN_RATIO = 0.05
 
 
 def person_bounds(pose: Pose) -> tuple[float, float, float, float] | None:
@@ -66,6 +82,55 @@ def fit_box_to_ratio(
     return next_left, next_top, next_width, next_height
 
 
+def expand_box_to_include_points(
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+    points: list[tuple[float, float]],
+    ratio: float,
+    margin: float,
+) -> tuple[int, int, int, int]:
+    if not points:
+        return left, top, width, height
+    required_left = min([left, *[point[0] - margin for point in points]])
+    required_top = min([top, *[point[1] - margin for point in points]])
+    required_right = max([left + width, *[point[0] + margin for point in points]])
+    required_bottom = max([top + height, *[point[1] + margin for point in points]])
+    return fit_box_to_ratio(
+        required_left,
+        required_top,
+        required_right - required_left,
+        required_bottom - required_top,
+        ratio,
+    )
+
+
+def constrain_box_to_image(
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+    image: Image.Image,
+    ratio: float,
+) -> tuple[int, int, int, int]:
+    width = max(1, width)
+    height = max(1, height)
+    if width > image.width:
+        width = image.width
+        height = max(1, round(width / ratio))
+    if height > image.height:
+        height = image.height
+        width = max(1, round(height * ratio))
+    if width > image.width:
+        width = image.width
+    if height > image.height:
+        height = image.height
+    left = max(0, min(left, image.width - width))
+    top = max(0, min(top, image.height - height))
+    return left, top, width, height
+
+
 def median(values: list[float]) -> float:
     ordered = sorted(values)
     middle = len(ordered) // 2
@@ -79,6 +144,62 @@ def average_point(pose: Pose, names: list[str]) -> tuple[float, float] | None:
     if not points:
         return None
     return median([point.x for point in points]), median([point.y for point in points])
+
+
+def head_guard_points(pose: Pose) -> list[tuple[float, float]]:
+    points = [
+        (point.x, point.y)
+        for point in pose.keypoints
+        if point.confidence > 0.05 and (point.name in HEAD_KEYPOINTS or point.name.startswith("face_"))
+    ]
+    frame = semantic_frame(pose)
+    if frame is not None and isinstance(frame["anchors"], dict):
+        head_top = frame["anchors"].get("head_top")
+        if isinstance(head_top, (int, float)):
+            points.append((float(frame["center_x"]), float(head_top)))
+    return points
+
+
+def hand_guard_points(pose: Pose) -> list[tuple[float, float]]:
+    return [
+        (point.x, point.y)
+        for point in pose.keypoints
+        if point.confidence > 0.05 and (point.name in HAND_KEYPOINTS or "_hand_" in point.name)
+    ]
+
+
+def apply_crop_guards(
+    image: Image.Image,
+    pose: Pose,
+    preset: CropPreset,
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+) -> tuple[int, int, int, int]:
+    ratio = preset.width / preset.height
+    min_dimension = min(image.width, image.height)
+    if preset.protectHead:
+        left, top, width, height = expand_box_to_include_points(
+            left,
+            top,
+            width,
+            height,
+            head_guard_points(pose),
+            ratio,
+            max(24.0, min_dimension * HEAD_GUARD_MARGIN_RATIO),
+        )
+    if preset.protectHands:
+        left, top, width, height = expand_box_to_include_points(
+            left,
+            top,
+            width,
+            height,
+            hand_guard_points(pose),
+            ratio,
+            max(32.0, min_dimension * HAND_GUARD_MARGIN_RATIO),
+        )
+    return left, top, width, height
 
 
 def semantic_frame(pose: Pose) -> dict[str, object] | None:
@@ -193,27 +314,29 @@ def make_crop(image: Image.Image, pose: Pose, preset: CropPreset) -> CropResult:
         left = round(center_x - target_width / 2)
         top = round(center_y - target_height / 2)
 
+    left, top, target_width, target_height = apply_crop_guards(
+        image,
+        pose,
+        preset,
+        left,
+        top,
+        target_width,
+        target_height,
+    )
+    left, top, target_width, target_height = constrain_box_to_image(
+        left,
+        top,
+        target_width,
+        target_height,
+        image,
+        preset.width / preset.height,
+    )
+
     right = left + target_width
     bottom = top + target_height
     source_box = CropBox(left=left, top=top, right=right, bottom=bottom)
 
-    padded = ImageOps.expand(
-        image,
-        border=(
-            max(0, -left),
-            max(0, -top),
-            max(0, right - image.width),
-            max(0, bottom - image.height),
-        ),
-        fill=(255, 255, 255),
-    )
-    padded_box = (
-        left + max(0, -left),
-        top + max(0, -top),
-        right + max(0, -left),
-        bottom + max(0, -top),
-    )
-    crop = padded.crop(padded_box).resize((preset.width, preset.height), Image.Resampling.LANCZOS)
+    crop = image.crop((left, top, right, bottom)).resize((preset.width, preset.height), Image.Resampling.LANCZOS)
 
     buffer = BytesIO()
     crop.save(buffer, format="PNG")
