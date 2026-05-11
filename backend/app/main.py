@@ -14,7 +14,7 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
 
 from .cropping import make_crop
-from .pose import Pose, classify_pose_view, make_pose_provider
+from .pose import Pose, make_pose_provider
 from .batch_store import append_batch_job, load_batch_jobs
 from .preset_store import load_presets, save_presets
 from .scene_store import load_scenes, save_scenes
@@ -43,6 +43,7 @@ from .training_store import (
     save_training_samples,
     save_upload_image,
 )
+from .view_classifier import classify_view
 
 app = FastAPI(title="OpenPose Crop Pipeline")
 POSE_DETECT_MAX_SIDE = int(os.getenv("POSE_DETECT_MAX_SIDE", "1280"))
@@ -211,7 +212,7 @@ async def process_upload(
 
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_angle = classify_pose_view(pose)
+    view_angle = classify_view(source_image, pose).angle
     matched_presets = presets_for_view(crop_presets, view_angle)
     try:
         crops = [make_crop(source_image, pose, preset) for preset in matched_presets]
@@ -254,7 +255,7 @@ async def analyze_upload(image: UploadFile, provider_name: str | None = None) ->
 
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_angle = classify_pose_view(pose)
+    view_angle = classify_view(source_image, pose).angle
     return PoseAnalysis(
         filename=image.filename,
         source={"width": source_image.width, "height": source_image.height},
@@ -278,7 +279,7 @@ async def create_training_sample(
     suffix = await save_upload_image(preset_id, sample_id, image, raw)
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_angle = classify_pose_view(pose)
+    view_angle = classify_view(source_image, pose).angle
     confidence = pose_confidence(pose.keypoints)
     return TrainingSample(
         id=sample_id,
@@ -322,7 +323,7 @@ def reanalyze_training_samples(
             next_samples.append(sample)
             continue
         pose = detect_pose(actual_provider, source_image)
-        view_angle = classify_pose_view(pose)
+        view_angle = classify_view(source_image, pose).angle
         next_samples.append(
             sample.model_copy(
                 update={

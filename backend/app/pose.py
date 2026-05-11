@@ -95,7 +95,7 @@ def average_confidence(pose: Pose, names: list[str]) -> float:
     return sum(max(0.0, min(1.0, point.confidence)) for point in points) / len(points)
 
 
-def classify_pose_view(pose: Pose) -> str:
+def classify_pose_view(pose: Pose, image: Image.Image | None = None) -> str:
     face_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear"]
     left_names = [
         "left_shoulder",
@@ -128,6 +128,11 @@ def classify_pose_view(pose: Pose) -> str:
     if side_imbalance >= 0.38:
         return "side"
 
+    if image is not None and body_score >= 0.15 and side_imbalance <= 0.32:
+        face_skin_ratio = face_region_skin_ratio(image, pose)
+        if face_skin_ratio is not None and face_skin_ratio < 0.16:
+            return "back"
+
     left_shoulder = pose.point("left_shoulder")
     right_shoulder = pose.point("right_shoulder")
     left_hip = pose.point("left_hip")
@@ -147,6 +152,65 @@ def classify_pose_view(pose: Pose) -> str:
                 return "side"
 
     return "front"
+
+
+def face_region_skin_ratio(image: Image.Image, pose: Pose) -> float | None:
+    points = [
+        point
+        for point in pose.keypoints
+        if point.confidence >= 0.15 and (point.name in {"nose", "left_eye", "right_eye", "left_ear", "right_ear"} or point.name.startswith("face_"))
+    ]
+    if len(points) < 5:
+        return None
+
+    left = min(point.x for point in points)
+    top = min(point.y for point in points)
+    right = max(point.x for point in points)
+    bottom = max(point.y for point in points)
+    width = right - left
+    height = bottom - top
+    if width <= 2 or height <= 2:
+        return None
+
+    margin_x = max(10.0, width * 0.35)
+    margin_y = max(10.0, height * 0.35)
+    crop_box = (
+        max(0, round(left - margin_x)),
+        max(0, round(top - margin_y)),
+        min(image.width, round(right + margin_x)),
+        min(image.height, round(bottom + margin_y)),
+    )
+    if crop_box[2] <= crop_box[0] or crop_box[3] <= crop_box[1]:
+        return None
+
+    crop = image.convert("RGB").crop(crop_box)
+    step = max(1, round(max(crop.width, crop.height) / 80))
+    skin_pixels = 0
+    sampled_pixels = 0
+    for y in range(0, crop.height, step):
+        for x in range(0, crop.width, step):
+            r, g, b = crop.getpixel((x, y))
+            if is_skin_pixel(r, g, b):
+                skin_pixels += 1
+            sampled_pixels += 1
+
+    if sampled_pixels == 0:
+        return None
+    return skin_pixels / sampled_pixels
+
+
+def is_skin_pixel(r: int, g: int, b: int) -> bool:
+    maximum = max(r, g, b)
+    minimum = min(r, g, b)
+    return (
+        r > 80
+        and g > 35
+        and b > 20
+        and maximum - minimum > 12
+        and r > g * 0.95
+        and r > b * 1.15
+        and g > b * 0.85
+    )
 
 
 class HeuristicPoseProvider(PoseProvider):

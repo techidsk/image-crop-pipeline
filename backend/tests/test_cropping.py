@@ -4,6 +4,7 @@ from backend.app.cropping import make_crop, person_bounds
 from backend.app.main import detect_pose, presets_for_view
 from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
 from backend.app.schemas import CropPreset, PoseKeypoint
+from backend.app.view_classifier import parse_paddle_direction, parse_person_attribute_logits, person_crop
 
 
 def test_make_crop_uses_anchor_and_target_size():
@@ -215,6 +216,32 @@ def test_classify_pose_view_back_when_face_is_missing():
     assert classify_pose_view(pose) == "back"
 
 
+def test_classify_pose_view_back_when_face_points_land_on_hair_region():
+    image = Image.new("RGB", (1000, 1200), "white")
+    pixels = image.load()
+    for y in range(160, 330):
+        for x in range(400, 600):
+            pixels[x, y] = (32, 24, 20)
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="left_shoulder", x=380, y=420, confidence=0.9),
+            PoseKeypoint(name="right_shoulder", x=620, y=420, confidence=0.9),
+            PoseKeypoint(name="left_hip", x=420, y=760, confidence=0.9),
+            PoseKeypoint(name="right_hip", x=580, y=760, confidence=0.9),
+            PoseKeypoint(name="left_knee", x=430, y=980, confidence=0.9),
+            PoseKeypoint(name="right_knee", x=570, y=980, confidence=0.9),
+            PoseKeypoint(name="nose", x=500, y=240, confidence=0.9),
+            PoseKeypoint(name="left_eye", x=465, y=230, confidence=0.9),
+            PoseKeypoint(name="right_eye", x=535, y=230, confidence=0.9),
+            PoseKeypoint(name="face_1", x=430, y=250, confidence=0.9),
+            PoseKeypoint(name="face_2", x=570, y=250, confidence=0.9),
+            PoseKeypoint(name="face_3", x=500, y=305, confidence=0.9),
+        ]
+    )
+
+    assert classify_pose_view(pose, image) == "back"
+
+
 def test_classify_pose_view_side_for_asymmetric_body_confidence():
     pose = Pose(
         keypoints=[
@@ -249,3 +276,34 @@ def test_detect_pose_maps_resized_detection_back_to_source_coordinates():
     assert nose is not None
     assert nose.x == 2000
     assert nose.y == 660
+
+
+def test_parse_paddle_direction_from_nested_attribute_output():
+    output = [
+        {
+            "attributes": [
+                "Age: Over18",
+                "Direction: Back",
+            ]
+        }
+    ]
+
+    assert parse_paddle_direction(output) == "back"
+
+
+def test_parse_person_attribute_logits_uses_direction_slice():
+    output = [0.0] * 26
+    output[23] = 0.2
+    output[24] = 0.4
+    output[25] = 0.9
+
+    assert parse_person_attribute_logits(output) == ("back", 0.9)
+
+
+def test_person_crop_resizes_large_source_for_attribute_classification():
+    image = Image.new("RGB", (4000, 4000), "white")
+    pose = HeuristicPoseProvider().detect(image)
+
+    crop = person_crop(image, pose)
+
+    assert max(crop.size) <= 768

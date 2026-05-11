@@ -359,6 +359,22 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
               <span>不裁手</span>
             </label>
           </div>
+          <div className="field-group">
+            <span>朝向</span>
+            <div className="orientation-options" role="radiogroup" aria-label="预设朝向">
+              {viewAngles.map((viewAngle) => (
+                <label className="radio-chip" key={viewAngle}>
+                  <input
+                    type="radio"
+                    name={`orientation-${preset.id}`}
+                    checked={(preset.orientation ?? "front") === viewAngle}
+                    onChange={() => onUpdate(preset.id, { orientation: viewAngle })}
+                  />
+                  <span>{viewAngleLabels[viewAngle]}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="crop-guard-options" aria-label="适用视角">
             {viewAngles.map((viewAngle) => (
               <label className="checkbox-row" key={viewAngle}>

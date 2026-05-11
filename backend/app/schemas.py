@@ -19,6 +19,7 @@ class CropPreset(BaseModel):
     composition: dict[str, Any] | None = None
     protectHead: bool = False
     protectHands: bool = False
+    orientation: ViewAngle = "front"
     viewAngles: list[ViewAngle] = Field(default_factory=lambda: ["front", "side", "back"])
     status: str = "draft"
     note: str = ""

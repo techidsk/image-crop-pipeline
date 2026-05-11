@@ -31,6 +31,7 @@ export const defaultPresets: CropPreset[] = [
     composition: null,
     protectHead: false,
     protectHands: false,
+    orientation: "front",
     viewAngles: ["front", "side", "back"],
     status: "draft",
     note: ""
@@ -49,6 +50,7 @@ export const defaultPresets: CropPreset[] = [
     composition: null,
     protectHead: false,
     protectHands: false,
+    orientation: "front",
     viewAngles: ["front", "side", "back"],
     status: "draft",
     note: ""

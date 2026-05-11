@@ -589,6 +589,21 @@ h2 {
   gap: 8px;
 }
 
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #52606f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.orientation-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .checkbox-row {
   min-height: 38px;
   flex-direction: row;
@@ -599,6 +614,31 @@ h2 {
   border-radius: 8px;
   background: #f7f8f6;
   color: #1f2933;
+}
+
+.radio-chip {
+  position: relative;
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  border: 1px solid #cfd8e1;
+  border-radius: 8px;
+  color: #3a4654;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.radio-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.radio-chip:has(input:checked) {
+  border-color: #1c6b62;
+  color: #ffffff;
+  background: #1c6b62;
 }
 
 .editor-card .checkbox-row input {
@@ -692,6 +732,20 @@ h2 {
 .status-pill.incomplete {
   color: #6f4d18;
   background: #fff5d6;
+}
+
+.orientation-pill {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid #d6ded7;
+  border-radius: 999px;
+  color: #2f5f58;
+  background: #f2f7f5;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .row-actions {

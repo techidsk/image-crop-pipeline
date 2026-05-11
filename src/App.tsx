@@ -101,6 +101,7 @@ export function App() {
       offsetY: 0,
       scale: 1,
       composition: null,
+      orientation: "front",
       status: "draft",
       note: ""
     };

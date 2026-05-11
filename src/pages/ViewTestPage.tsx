@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ImageUp, Play, RotateCcw } from "lucide-react";
 import { viewAngleLabels } from "../constants";
-import type { PoseAnalysis, PoseProviderId, ViewAngle } from "../types";
+import type { PoseAnalysis, PoseKeypoint, PoseProviderId, ViewAngle } from "../types";
 
 type ViewTestPageProps = {
   poseProvider: PoseProviderId;
@@ -28,6 +28,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
 
   const activePreview = previews[activeIndex];
   const activeResult = results[activeIndex];
+  const activeViewAngle = activeResult ? resolvedViewAngle(activeResult) : null;
 
   const selectedLabel = useMemo(() => {
     if (previews.length === 0) return "选择正面、侧面或背面图片";
@@ -65,7 +66,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
         throw new Error(body.detail ?? "视角识别失败");
       }
       const body = (await response.json()) as { images: PoseAnalysis[] };
-      setResults(body.images);
+      setResults(body.images.map(normalizePoseAnalysis));
       setActiveIndex(0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "视角识别失败");
@@ -119,8 +120,8 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
               onClick={() => setActiveIndex(index)}
             >
               <span>{preview.file.name}</span>
-              <small className={results[index] ? `view-result-${results[index].viewAngle}` : ""}>
-                {results[index] ? `结论：${viewAngleLabels[results[index].viewAngle]}` : `${Math.round(preview.file.size / 1024)} KB`}
+              <small className={results[index] ? `view-result-${resolvedViewAngle(results[index])}` : ""}>
+                {results[index] ? `结论：${viewAngleLabels[resolvedViewAngle(results[index])]}` : `${Math.round(preview.file.size / 1024)} KB`}
               </small>
             </button>
           ))}
@@ -135,11 +136,11 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
             <div className="empty-state">选择图片后开始测试视角识别</div>
           )}
         </div>
-        {activeResult && (
+        {activeResult && activeViewAngle && (
           <div className="result-panel view-test-result">
             <div>
-              <span className={`view-angle-pill ${viewTone[activeResult.viewAngle]}`}>
-                {viewAngleLabels[activeResult.viewAngle]}
+              <span className={`view-angle-pill ${viewTone[activeViewAngle]}`}>
+                {viewAngleLabels[activeViewAngle]}
               </span>
               <h2>{activeResult.filename ?? activePreview?.file.name}</h2>
               <p>
@@ -159,13 +160,14 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
 }
 
 function PosePreview({ previewUrl, result }: { previewUrl: string; result?: PoseAnalysis }) {
+  const viewAngle = result ? resolvedViewAngle(result) : null;
   return (
     <div className="pose-preview-wrap">
       <img src={previewUrl} alt={result?.filename ?? "View test preview"} />
-      {result && (
-        <div className={`pose-conclusion ${viewTone[result.viewAngle]}`}>
+      {result && viewAngle && (
+        <div className={`pose-conclusion ${viewTone[viewAngle]}`}>
           <strong>识别结论</strong>
-          <span>{viewAngleLabels[result.viewAngle]}</span>
+          <span>{viewAngleLabels[viewAngle]}</span>
         </div>
       )}
       {result?.keypoints.map((point) => {
@@ -197,6 +199,72 @@ function Metric({ label, value }: { label: string; value: number }) {
 
 function countVisible(result: PoseAnalysis, names: string[]) {
   return names.filter((name) => result.keypoints.some((point) => point.name === name && point.confidence >= 0.2)).length;
+}
+
+function normalizePoseAnalysis(result: PoseAnalysis): PoseAnalysis {
+  return {
+    ...result,
+    viewAngle: result.viewAngle ?? classifyPoseView(result)
+  };
+}
+
+function resolvedViewAngle(result: PoseAnalysis): ViewAngle {
+  return result.viewAngle ?? classifyPoseView(result);
+}
+
+function classifyPoseView(result: PoseAnalysis): ViewAngle {
+  const faceNames = ["nose", "left_eye", "right_eye", "left_ear", "right_ear"];
+  const leftNames = ["left_shoulder", "left_elbow", "left_wrist", "left_hip", "left_knee", "left_ankle"];
+  const rightNames = ["right_shoulder", "right_elbow", "right_wrist", "right_hip", "right_knee", "right_ankle"];
+  const faceScore = averageConfidence(result, faceNames);
+  const leftScore = averageConfidence(result, leftNames);
+  const rightScore = averageConfidence(result, rightNames);
+  const bodyScore = (leftScore + rightScore) / 2;
+  const visibleFacePoints = countVisible(result, faceNames);
+
+  if (bodyScore >= 0.15 && (faceScore < 0.16 || visibleFacePoints <= 1)) return "back";
+
+  const sideImbalance = Math.abs(leftScore - rightScore) / Math.max(leftScore, rightScore, 0.01);
+  if (sideImbalance >= 0.38) return "side";
+
+  const leftShoulder = pointByName(result, "left_shoulder");
+  const rightShoulder = pointByName(result, "right_shoulder");
+  const leftHip = pointByName(result, "left_hip");
+  const rightHip = pointByName(result, "right_hip");
+  const nose = pointByName(result, "nose");
+  if (leftShoulder && rightShoulder && leftHip && rightHip) {
+    const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+    const bodyHeight = Math.max(1, Math.abs((leftHip.y + rightHip.y) / 2 - (leftShoulder.y + rightShoulder.y) / 2));
+    if (shoulderWidth / bodyHeight < 0.45 && faceScore >= 0.16) return "side";
+    if (nose && nose.confidence >= 0.2 && shoulderWidth > 1) {
+      const shoulderCenter = (leftShoulder.x + rightShoulder.x) / 2;
+      if (Math.abs(nose.x - shoulderCenter) / shoulderWidth >= 0.22) return "side";
+    }
+  }
+
+  return "front";
+}
+
+function averageConfidence(result: PoseAnalysis, names: string[]) {
+  const points = names.map((name) => pointByName(result, name)).filter((point): point is NonNullable<typeof point> => Boolean(point));
+  if (points.length === 0) return 0;
+  return points.reduce((sum, point) => sum + Math.max(0, Math.min(1, point.confidence)), 0) / points.length;
+}
+
+function pointByName(result: PoseAnalysis, name: string): PoseKeypoint | undefined {
+  if (name === "neck") {
+    const left = pointByName(result, "left_shoulder");
+    const right = pointByName(result, "right_shoulder");
+    if (left && right) {
+      return {
+        name,
+        x: (left.x + right.x) / 2,
+        y: (left.y + right.y) / 2,
+        confidence: Math.min(left.confidence, right.confidence)
+      };
+    }
+  }
+  return result.keypoints.find((point) => point.name === name);
 }
 
 function providerLabel(provider: PoseProviderId) {

@@ -39,6 +39,7 @@ export type CropPreset = {
   composition?: LearnedComposition | null;
   protectHead?: boolean;
   protectHands?: boolean;
+  orientation: ViewAngle;
   viewAngles?: ViewAngle[];
   status?: PresetStatus;
   note?: string;
@@ -67,7 +68,7 @@ export type PoseKeypoint = ProcessResponse["keypoints"][number];
 export type PoseAnalysis = {
   filename?: string;
   source: { width: number; height: number };
-  viewAngle: ViewAngle;
+  viewAngle?: ViewAngle;
   keypoints: PoseKeypoint[];
 };
 
