@@ -1,9 +1,11 @@
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ViewAngle = Literal["front", "side", "back"]
 ReviewStatus = Literal["pending_review", "approved", "rejected"]
+TAG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,23}$")
 
 
 class CropPreset(BaseModel):
@@ -24,6 +26,24 @@ class CropPreset(BaseModel):
     viewAngles: list[ViewAngle] = Field(default_factory=lambda: ["front", "side", "back"])
     status: str = "draft"
     note: str = ""
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, tags: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for tag in tags:
+            normalized = tag.strip().lower()
+            if not normalized:
+                continue
+            if not TAG_PATTERN.fullmatch(normalized):
+                raise ValueError(
+                    "Tags must start with a lowercase letter or number and contain only lowercase letters, numbers, hyphens, or underscores."
+                )
+            if normalized not in cleaned:
+                cleaned.append(normalized)
+        if len(cleaned) > 8:
+            raise ValueError("A preset can have at most 8 tags.")
+        return cleaned
 
 
 class PoseKeypoint(BaseModel):

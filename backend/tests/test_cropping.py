@@ -1,10 +1,37 @@
+import pytest
 from PIL import Image
+from pydantic import ValidationError
 
 from backend.app.cropping import make_crop, person_bounds
 from backend.app.main import detect_pose, presets_for_view
 from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
 from backend.app.schemas import CropPreset, PoseKeypoint
 from backend.app.view_classifier import parse_paddle_direction, parse_person_attribute_logits, person_crop
+
+
+def test_crop_preset_normalizes_and_deduplicates_tags():
+    preset = CropPreset(
+        id="tagged",
+        name="Tagged",
+        tags=["Portrait", " portrait ", "upper-body"],
+        width=100,
+        height=100,
+        anchor="neck",
+    )
+
+    assert preset.tags == ["portrait", "upper-body"]
+
+
+def test_crop_preset_rejects_invalid_tags():
+    with pytest.raises(ValidationError):
+        CropPreset(
+            id="tagged",
+            name="Tagged",
+            tags=["portrait", "bad tag"],
+            width=100,
+            height=100,
+            anchor="neck",
+        )
 
 
 def test_make_crop_uses_anchor_and_target_size():

@@ -249,6 +249,7 @@ export function App() {
         {view === "presetEditor" && editingPreset && (
           <PresetEditorPage
             preset={editingPreset}
+            allTags={allTags}
             poseProvider={poseProvider}
             onBack={() => navigateTo("presetList")}
             onUpdate={updatePreset}

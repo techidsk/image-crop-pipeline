@@ -319,6 +319,7 @@
 
   .tag-filter,
   .row-tags,
+  .managed-tags,
   .crop-action-row,
   .progress-meta,
   .image-review-actions,
@@ -328,8 +329,13 @@
   }
 
   .tag-filter button,
-  .row-tags span {
+  .row-tags span,
+  .managed-tag {
     @apply inline-flex min-h-[30px] items-center gap-1.5 rounded-full border border-[#cfd8e1] bg-white px-2.5 text-xs text-[#3a4654];
+  }
+
+  .managed-tag {
+    @apply bg-[#eef6f4] text-primary;
   }
 
   .tag-filter button small {
@@ -494,8 +500,40 @@
   }
 
   .crop-guard-options,
-  .orientation-options {
+  .orientation-options,
+  .tag-manager,
+  .tag-suggestions {
     @apply grid gap-2;
+  }
+
+  .tag-manager {
+    @apply rounded-lg border border-[#dce5e2] bg-[#f8faf8] p-2.5;
+  }
+
+  .tag-add-row {
+    @apply grid grid-cols-[minmax(0,1fr)_86px] gap-2;
+  }
+
+  .add-tag-button {
+    @apply inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[7px] bg-primary px-2.5 text-sm font-bold text-white;
+  }
+
+  .tag-suggestions > span,
+  .empty-tags,
+  .tag-error {
+    @apply text-xs;
+  }
+
+  .tag-suggestions > span {
+    @apply font-bold text-[#52606f];
+  }
+
+  .empty-tags {
+    @apply inline-flex min-h-[30px] items-center text-muted;
+  }
+
+  .tag-error {
+    @apply rounded-md bg-[#fff1f1] px-2.5 py-2 text-danger;
   }
 
   .crop-guard-options {

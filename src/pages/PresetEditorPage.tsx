@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ImageUp, RefreshCw, Save, Wand2 } from "lucide-react";
+import { ChevronLeft, ImageUp, Plus, RefreshCw, Save, Wand2, X } from "lucide-react";
 import { viewAngleLabels } from "../constants";
 import { NumberField } from "../components/NumberField";
 import { TrainingCard } from "../components/TrainingCard";
@@ -9,7 +9,6 @@ import {
   filterModels,
   fitAspectCropAround,
   median,
-  parseTags,
   personBounds,
   round4,
   semanticAnchorLabel,
@@ -43,12 +42,16 @@ type TrainingDiagnostics = {
 
 type PresetEditorPageProps = {
   preset: CropPreset;
+  allTags: string[];
   poseProvider: PoseProviderId;
   onBack: () => void;
   onUpdate: (id: string, patch: Partial<CropPreset>) => void;
 };
 
-export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: PresetEditorPageProps) {
+const maxTagsPerPreset = 8;
+const tagPattern = /^[a-z0-9][a-z0-9_-]{0,23}$/;
+
+export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpdate }: PresetEditorPageProps) {
   const [samples, setSamples] = useState<TrainingSample[]>([]);
   const [selectedSampleId, setSelectedSampleId] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -321,14 +324,11 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
             名称
             <input value={preset.name} onChange={(event) => onUpdate(preset.id, { name: event.target.value })} />
           </label>
-          <label>
-            标签
-            <input
-              value={preset.tags.join(", ")}
-              placeholder="portrait, product, square"
-              onChange={(event) => onUpdate(preset.id, { tags: parseTags(event.target.value) })}
-            />
-          </label>
+          <TagManager
+            tags={preset.tags}
+            allTags={allTags}
+            onChange={(tags) => onUpdate(preset.id, { tags })}
+          />
           <label>
             状态说明
             <textarea
@@ -485,6 +485,89 @@ export function PresetEditorPage({ preset, poseProvider, onBack, onUpdate }: Pre
         </section>
       </div>
     </section>
+  );
+}
+
+function TagManager({
+  tags,
+  allTags,
+  onChange
+}: {
+  tags: string[];
+  allTags: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [draftTag, setDraftTag] = useState("");
+  const [tagError, setTagError] = useState("");
+  const normalizedTags = normalizeTags(tags);
+  const availableTags = allTags.filter((tag) => !normalizedTags.includes(tag));
+
+  const addTag = (value: string) => {
+    const nextTag = normalizeTag(value);
+    const error = validateTag(nextTag, normalizedTags);
+    if (error) {
+      setTagError(error);
+      return;
+    }
+    onChange([...normalizedTags, nextTag]);
+    setDraftTag("");
+    setTagError("");
+  };
+
+  const removeTag = (tag: string) => {
+    onChange(normalizedTags.filter((item) => item !== tag));
+    setTagError("");
+  };
+
+  return (
+    <div className="tag-manager">
+      <div className="field-group">
+        <span>标签</span>
+        <div className="managed-tags" aria-label="当前标签">
+          {normalizedTags.map((tag) => (
+            <button key={tag} type="button" className="managed-tag" onClick={() => removeTag(tag)} title={`移除 ${tag}`}>
+              <span>{tag}</span>
+              <X size={14} />
+            </button>
+          ))}
+          {normalizedTags.length === 0 && <span className="empty-tags">尚未添加标签</span>}
+        </div>
+      </div>
+      <div className="tag-add-row">
+        <input
+          value={draftTag}
+          placeholder="portrait"
+          aria-label="新增标签"
+          onChange={(event) => {
+            setDraftTag(event.target.value);
+            setTagError("");
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addTag(draftTag);
+            }
+          }}
+        />
+        <button type="button" className="add-tag-button" onClick={() => addTag(draftTag)}>
+          <Plus size={16} />
+          <span>添加</span>
+        </button>
+      </div>
+      {tagError && <p className="tag-error">{tagError}</p>}
+      {availableTags.length > 0 && (
+        <div className="tag-suggestions">
+          <span>已有标签</span>
+          <div className="tag-filter">
+            {availableTags.map((tag) => (
+              <button key={tag} type="button" className="ghost-chip" onClick={() => addTag(tag)}>
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -677,6 +760,22 @@ function providerLabel(provider: TrainingSample["poseProvider"]) {
   if (provider === "rtmw") return "RTMW-l";
   if (provider === "heuristic") return "旧方案";
   return "未知来源";
+}
+
+function normalizeTag(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizeTags(tags: string[]) {
+  return Array.from(new Set(tags.map(normalizeTag).filter(Boolean)));
+}
+
+function validateTag(tag: string, existingTags: string[]) {
+  if (!tag) return "请输入标签。";
+  if (!tagPattern.test(tag)) return "标签只能使用小写字母、数字、连字符或下划线，并以字母或数字开头，最多 24 个字符。";
+  if (existingTags.includes(tag)) return "这个标签已经存在。";
+  if (existingTags.length >= maxTagsPerPreset) return `单个预设最多 ${maxTagsPerPreset} 个标签。`;
+  return "";
 }
 
 const viewAngles: ViewAngle[] = ["front", "side", "back"];
