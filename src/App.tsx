@@ -107,6 +107,10 @@ export function App() {
     }
   };
 
+  const updateJob = (job: BatchJob) => {
+    setJobs((current) => current.map((item) => (item.id === job.id ? job : item)));
+  };
+
   const savePresets = async (nextPresets: CropPreset[]) => {
     setPresets(nextPresets);
     const saved = await persistPresets(nextPresets);
@@ -220,6 +224,7 @@ export function App() {
             jobs={jobs}
             poseProvider={poseProvider}
             onJobCreated={(job) => setJobs((current) => [job, ...current])}
+            onJobUpdated={updateJob}
           />
         )}
         {view === "viewTest" && <ViewTestPage poseProvider={poseProvider} />}

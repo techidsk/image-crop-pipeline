@@ -31,7 +31,7 @@ bun run build
 
 - `frontend`：Bun 构建 Vite 静态资源，Nginx 托管页面，并把 `/api` 反向代理到后端
 - `backend`：FastAPI + Pillow + ONNX Runtime
-- `./backend/data`：持久化预设、场景、训练样本和任务记录
+- `./backend/data`：持久化预设、场景、训练样本和 SQLite 任务记录
 - `./models`：放置 RTMW ONNX 模型
 - `./outputs`：批量任务默认输出目录
 
@@ -51,7 +51,7 @@ docker compose up -d --build
 models/rtmw-l-384x288.onnx
 ```
 
-如果模型不存在，后端会回退到轻量 `heuristic` 方案，方便先跑通部署链路。批量任务里填写相对输出目录 `outputs` 时，容器会写入宿主机的 `./outputs` 目录。
+如果模型不存在，后端会回退到轻量 `heuristic` 方案，方便先跑通部署链路。批量任务里填写相对输出目录 `outputs` 时，容器会写入宿主机的 `./outputs` 目录。任务历史会写入 `backend/data/app.db`，预设和场景仍保留为 JSON，方便查看和版本管理。
 
 常用命令：
 

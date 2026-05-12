@@ -15,7 +15,13 @@ from pydantic import ValidationError
 
 from .cropping import make_crop
 from .pose import Pose, make_pose_provider
-from .batch_store import append_batch_job, load_batch_jobs
+from .batch_store import (
+    append_batch_job,
+    get_batch_job,
+    load_batch_jobs,
+    update_batch_job_image_review_status,
+    update_batch_job_review_status,
+)
 from .preset_store import load_presets, save_presets
 from .scene_store import load_scenes, save_scenes
 from .schemas import (
@@ -29,6 +35,7 @@ from .schemas import (
     PoseAnalysis,
     PoseAnalysisBatchResponse,
     ProcessResponse,
+    ReviewStatusUpdate,
     TrainingSample,
     TrainingSampleBatchResponse,
 )
@@ -182,6 +189,29 @@ def open_batch_job_output(job_id: str) -> dict[str, str]:
     except OSError as exc:
         raise HTTPException(status_code=400, detail=f"Cannot open output directory: {exc}") from exc
     return {"status": "ok", "path": str(output_path)}
+
+
+@app.patch("/api/batch-jobs/{job_id}/review", response_model=BatchJob)
+def patch_batch_job_review(job_id: str, update: ReviewStatusUpdate) -> BatchJob:
+    job = update_batch_job_review_status(job_id, update.reviewStatus)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+    return job
+
+
+@app.patch("/api/batch-jobs/{job_id}/images/{filename:path}/review", response_model=BatchJob)
+def patch_batch_job_image_review(
+    job_id: str,
+    filename: str,
+    update: ReviewStatusUpdate,
+) -> BatchJob:
+    try:
+        job = update_batch_job_image_review_status(job_id, filename, update.reviewStatus)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Batch job image not found") from exc
+    if job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+    return job
 
 
 def parse_presets(raw_presets: str) -> list[CropPreset]:
@@ -505,6 +535,28 @@ async def run_batch_job(
         )
     )
     return BatchJobResponse(job=job, images=results)
+
+
+@app.post("/api/batch-jobs/{job_id}/rerun", response_model=BatchJobResponse)
+async def rerun_batch_job(
+    job_id: str,
+    images: list[UploadFile] = File(...),
+) -> BatchJobResponse:
+    source_job = get_batch_job(job_id)
+    if source_job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+    if not images:
+        raise HTTPException(status_code=400, detail="重跑需要重新上传原图。")
+
+    rerun_root = Path(source_job.outputDir).expanduser()
+    if rerun_root.name == source_job.id:
+        rerun_root = rerun_root.parent
+    return await run_batch_job(
+        images=images,
+        scene_id=source_job.sceneId,
+        output_dir=str(rerun_root),
+        pose_provider=source_job.poseProvider,
+    )
 
 
 @app.post("/api/batch-jobs/run-stream")

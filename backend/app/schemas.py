@@ -3,6 +3,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 ViewAngle = Literal["front", "side", "back"]
+ReviewStatus = Literal["pending_review", "approved", "rejected"]
 
 
 class CropPreset(BaseModel):
@@ -118,6 +119,7 @@ class BatchJobImage(BaseModel):
     filename: str
     outputs: int
     error: str = ""
+    reviewStatus: ReviewStatus = "pending_review"
 
 
 class BatchJob(BaseModel):
@@ -130,9 +132,14 @@ class BatchJob(BaseModel):
     outputCount: int
     status: str
     createdAt: str
+    reviewStatus: ReviewStatus = "pending_review"
     images: list[BatchJobImage] = []
 
 
 class BatchJobResponse(BaseModel):
     job: BatchJob
     images: list[ProcessResponse]
+
+
+class ReviewStatusUpdate(BaseModel):
+    reviewStatus: ReviewStatus

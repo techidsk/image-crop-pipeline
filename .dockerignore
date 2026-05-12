@@ -9,4 +9,7 @@ __pycache__
 vite.config.d.ts
 outputs
 backend/data/training_samples
+backend/data/app.db
+backend/data/app.db-*
+backend/data/batch_jobs.json
 models/*.onnx

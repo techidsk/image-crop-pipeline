@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Eye, Layers3, Scissors, Workflow } from "lucide-react";
+import { BriefcaseBusiness, Eye, Layers3, ListChecks, Scissors, Workflow } from "lucide-react";
 import type { AppView, PoseProviderId } from "../types";
 
 type SidebarProps = {
@@ -10,37 +10,63 @@ type SidebarProps = {
 };
 
 export function Sidebar({ view, error, poseProvider, onNavigate, onPoseProviderChange }: SidebarProps) {
+  const workflowSteps = ["上传", "姿态", "视角", "预设", "裁切", "输出"];
+
   return (
     <aside className="app-sidebar">
       <div className="brand">
         <span className="mark">OP</span>
         <div>
-          <h1>OpenPose Crop Pipeline</h1>
-          <p>批量图片裁切工作台</p>
+          <h1>Crop Pipeline</h1>
+          <p>Python 工作流 · React 控制台</p>
         </div>
       </div>
       <nav className="side-nav" aria-label="Views">
-        <button className={view === "batch" ? "active" : ""} onClick={() => onNavigate("batch")}>
-          <Scissors size={17} />
-          <span>批量处理</span>
-        </button>
-        <button className={view === "batchJobs" ? "active" : ""} onClick={() => onNavigate("batchJobs")}>
-          <Workflow size={17} />
-          <span>批量任务</span>
-        </button>
-        <button className={view === "viewTest" ? "active" : ""} onClick={() => onNavigate("viewTest")}>
-          <Eye size={17} />
-          <span>视角测试</span>
-        </button>
-        <button className={view === "sceneList" ? "active" : ""} onClick={() => onNavigate("sceneList")}>
-          <BriefcaseBusiness size={17} />
-          <span>场景管理</span>
-        </button>
-        <button className={view === "presetList" || view === "presetEditor" ? "active" : ""} onClick={() => onNavigate("presetList")}>
-          <Layers3 size={17} />
-          <span>预设管理</span>
-        </button>
+        <div className="side-nav-section">
+          <span className="side-nav-title">工作流</span>
+          <button className={view === "batchJobs" ? "active" : ""} onClick={() => onNavigate("batchJobs")}>
+            <Workflow size={17} />
+            <span>Pipeline 任务</span>
+          </button>
+          <button className={view === "batch" ? "active" : ""} onClick={() => onNavigate("batch")}>
+            <Scissors size={17} />
+            <span>单批次试跑</span>
+          </button>
+        </div>
+
+        <div className="side-nav-section">
+          <span className="side-nav-title">配置模块</span>
+          <button className={view === "sceneList" ? "active" : ""} onClick={() => onNavigate("sceneList")}>
+            <BriefcaseBusiness size={17} />
+            <span>场景 / 品牌</span>
+          </button>
+          <button className={view === "presetList" || view === "presetEditor" ? "active" : ""} onClick={() => onNavigate("presetList")}>
+            <Layers3 size={17} />
+            <span>裁切预设</span>
+          </button>
+        </div>
+
+        <div className="side-nav-section">
+          <span className="side-nav-title">诊断工具</span>
+          <button className={view === "viewTest" ? "active" : ""} onClick={() => onNavigate("viewTest")}>
+            <Eye size={17} />
+            <span>视角测试</span>
+          </button>
+        </div>
       </nav>
+
+      <div className="pipeline-card" aria-label="Pipeline stages">
+        <div className="pipeline-card-head">
+          <ListChecks size={16} />
+          <strong>后端处理阶段</strong>
+        </div>
+        <ol>
+          {workflowSteps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      </div>
+
       <label className="provider-select">
         姿态引擎
         <select value={poseProvider} onChange={(event) => onPoseProviderChange(event.target.value as PoseProviderId)}>

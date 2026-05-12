@@ -24,6 +24,7 @@ DEFAULT_PRESETS = [
         scale=1,
         protectHead=False,
         protectHands=False,
+        orientation="front",
     ),
     CropPreset(
         id="upper-square-1600",
@@ -38,6 +39,7 @@ DEFAULT_PRESETS = [
         scale=1,
         protectHead=False,
         protectHands=False,
+        orientation="front",
     ),
 ]
 

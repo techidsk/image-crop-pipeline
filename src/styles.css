@@ -63,7 +63,7 @@ h2 {
 .app-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   padding: 18px;
   border-color: #d9ddd6;
   box-shadow: 0 16px 38px rgba(30, 42, 38, 0.06);
@@ -103,7 +103,73 @@ h2 {
 .side-nav {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+}
+
+.side-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.side-nav-title {
+  color: #7b8794;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.pipeline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #dce4df;
+  border-radius: 8px;
+  background: #f7faf7;
+}
+
+.pipeline-card-head {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  color: #26313d;
+  font-size: 13px;
+}
+
+.pipeline-card ol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: pipeline-step;
+}
+
+.pipeline-card li {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: #52606f;
+  font-size: 12px;
+  white-space: nowrap;
+  counter-increment: pipeline-step;
+}
+
+.pipeline-card li::before {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #6d7f72;
+  font-size: 10px;
+  font-weight: 800;
+  content: counter(pipeline-step);
 }
 
 .provider-select {
@@ -207,6 +273,172 @@ h2 {
 
 .job-history-panel {
   background: #ffffff;
+}
+
+.job-detail-view {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+
+.job-detail-grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+}
+
+.job-image-list {
+  display: flex;
+  min-width: 0;
+  max-height: 520px;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+
+.job-image-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid #dde3e9;
+  border-radius: 7px;
+  color: #3a4654;
+  background: #ffffff;
+  text-align: left;
+}
+
+.job-image-list button.active {
+  border-color: #1c6b62;
+  box-shadow: inset 3px 0 0 #1c6b62;
+}
+
+.job-image-list span,
+.job-image-list strong,
+.job-image-list small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-image-list button > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.job-image-list small {
+  color: #657384;
+  font-size: 12px;
+}
+
+.job-output-panel {
+  min-width: 0;
+  overflow: auto;
+}
+
+.image-review-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mark-image-rejected {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #8a2525;
+  background: #fff1f1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #34414d;
+  background: #e5eaef;
+}
+
+.review-action.approve {
+  color: #1c6b62;
+  background: #edf3f2;
+}
+
+.review-action.reject {
+  color: #8a2525;
+  background: #fff1f1;
+}
+
+.review-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.progress-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid #dbe4df;
+  border-radius: 8px;
+  background: #f7faf7;
+}
+
+.result-header.compact {
+  margin-bottom: 0;
+}
+
+.progress-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dfe6e3;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1c6b62;
+}
+
+.progress-meta,
+.progress-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: #657384;
+  font-size: 12px;
+}
+
+.progress-events {
+  flex-direction: column;
+}
+
+.progress-events span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-events span.failed {
+  color: #8a2525;
 }
 
 .section-header,
@@ -734,6 +966,11 @@ h2 {
   background: #fff5d6;
 }
 
+.status-pill.danger {
+  color: #8a2525;
+  background: #fff1f1;
+}
+
 .orientation-pill {
   display: inline-flex;
   min-height: 28px;
@@ -925,6 +1162,14 @@ h2 {
   border: 1px solid #dde3e9;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.job-table-shell tbody tr {
+  cursor: pointer;
+}
+
+.job-table-shell tbody tr.selected td {
+  background: #eef6f4;
 }
 
 .output-dir-button {

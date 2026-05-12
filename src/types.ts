@@ -1,6 +1,7 @@
 export type AppView = "batch" | "viewTest" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
 export type PoseProviderId = "rtmw" | "heuristic";
 export type ViewAngle = "front" | "side" | "back";
+export type ReviewStatus = "pending_review" | "approved" | "rejected";
 
 export type CropStrategy = "anchor_center" | "anchor_top" | "full_height" | "learned_composition" | "pose_semantic_composition";
 export type PresetStatus = "draft" | "incomplete" | "ready";
@@ -120,6 +121,7 @@ export type BatchJobImage = {
   filename: string;
   outputs: number;
   error: string;
+  reviewStatus: ReviewStatus;
 };
 
 export type BatchJob = {
@@ -131,6 +133,7 @@ export type BatchJob = {
   imageCount: number;
   outputCount: number;
   status: "completed" | "failed" | "running";
+  reviewStatus: ReviewStatus;
   createdAt: string;
   images: BatchJobImage[];
 };
