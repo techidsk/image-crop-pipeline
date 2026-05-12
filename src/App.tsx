@@ -10,20 +10,63 @@ import { SceneListPage } from "./pages/SceneListPage";
 import { ViewTestPage } from "./pages/ViewTestPage";
 import type { AppView, BatchJob, CropPreset, CropScene, PoseProviderId } from "./types";
 
+type AppRoute = {
+  view: AppView;
+  presetId?: string;
+};
+
+const routeForPath = (pathname: string): AppRoute => {
+  const parts = pathname.split("/").filter(Boolean);
+
+  if (parts[0] === "jobs") return { view: "batchJobs" };
+  if (parts[0] === "batch") return { view: "batch" };
+  if (parts[0] === "scenes") return { view: "sceneList" };
+  if (parts[0] === "view-test") return { view: "viewTest" };
+  if (parts[0] === "presets") {
+    return parts[1] ? { view: "presetEditor", presetId: decodeURIComponent(parts[1]) } : { view: "presetList" };
+  }
+
+  return { view: "batch" };
+};
+
+const pathForRoute = (view: AppView, presetId?: string) => {
+  if (view === "batchJobs") return "/jobs";
+  if (view === "batch") return "/batch";
+  if (view === "sceneList") return "/scenes";
+  if (view === "viewTest") return "/view-test";
+  if (view === "presetEditor" && presetId) return `/presets/${encodeURIComponent(presetId)}`;
+  return "/presets";
+};
+
 export function App() {
-  const [view, setView] = useState<AppView>("batch");
+  const initialRoute = routeForPath(window.location.pathname);
+  const [route, setRoute] = useState<AppRoute>(initialRoute);
   const [presets, setPresets] = useState<CropPreset[]>(defaultPresets);
   const [scenes, setScenes] = useState<CropScene[]>([]);
   const [jobs, setJobs] = useState<BatchJob[]>([]);
   const [poseProvider, setPoseProvider] = useState<PoseProviderId>("rtmw");
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [editingPresetId, setEditingPresetId] = useState(defaultPresets[0].id);
+  const [editingPresetId, setEditingPresetId] = useState(initialRoute.presetId ?? defaultPresets[0].id);
   const [error, setError] = useState("");
+  const view = route.view;
 
   useEffect(() => {
     void loadPresets();
     void loadScenes();
     void loadJobs();
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const nextRoute = routeForPath(window.location.pathname);
+      setRoute(nextRoute);
+      if (nextRoute.presetId) {
+        setEditingPresetId(nextRoute.presetId);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   const allTags = useMemo(
@@ -80,6 +123,17 @@ export function App() {
     }
   };
 
+  const navigateTo = (nextView: AppView, presetId?: string) => {
+    const path = pathForRoute(nextView, presetId);
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, "", path);
+    }
+    setRoute({ view: nextView, presetId });
+    if (presetId) {
+      setEditingPresetId(presetId);
+    }
+  };
+
   const updatePreset = (id: string, patch: Partial<CropPreset>) => {
     const nextPresets = presets.map((preset) => (preset.id === id ? { ...preset, ...patch } : preset));
     void savePresets(nextPresets).catch((err) =>
@@ -106,7 +160,7 @@ export function App() {
       note: ""
     };
     setEditingPresetId(id);
-    setView("presetEditor");
+    navigateTo("presetEditor", id);
     void savePresets([...presets, nextPreset]).catch((err) =>
       setError(err instanceof Error ? err.message : "预设保存失败")
     );
@@ -115,7 +169,7 @@ export function App() {
   const duplicatePreset = (preset: CropPreset) => {
     const copy = { ...preset, id: `${preset.id}-copy-${Date.now()}`, name: `${preset.name} 副本` };
     setEditingPresetId(copy.id);
-    setView("presetEditor");
+    navigateTo("presetEditor", copy.id);
     void savePresets([...presets, copy]).catch((err) =>
       setError(err instanceof Error ? err.message : "预设保存失败")
     );
@@ -125,7 +179,7 @@ export function App() {
     const nextPresets = presets.filter((preset) => preset.id !== id);
     if (editingPresetId === id) {
       setEditingPresetId(nextPresets[0]?.id ?? "");
-      setView("presetList");
+      navigateTo("presetList");
     }
     void savePresets(nextPresets).catch((err) =>
       setError(err instanceof Error ? err.message : "预设保存失败")
@@ -134,7 +188,7 @@ export function App() {
 
   const openEditor = (id: string) => {
     setEditingPresetId(id);
-    setView("presetEditor");
+    navigateTo("presetEditor", id);
   };
 
   return (
@@ -143,7 +197,7 @@ export function App() {
         view={view}
         error={error}
         poseProvider={poseProvider}
-        onNavigate={setView}
+        onNavigate={navigateTo}
         onPoseProviderChange={setPoseProvider}
       />
       <section className="page-shell">
@@ -191,7 +245,7 @@ export function App() {
           <PresetEditorPage
             preset={editingPreset}
             poseProvider={poseProvider}
-            onBack={() => setView("presetList")}
+            onBack={() => navigateTo("presetList")}
             onUpdate={updatePreset}
           />
         )}
