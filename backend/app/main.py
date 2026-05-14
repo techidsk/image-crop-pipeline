@@ -3,6 +3,8 @@ import base64
 import os
 import subprocess
 import sys
+import tempfile
+import zipfile
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -12,6 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
+from starlette.background import BackgroundTask
 
 from .cropping import make_crop
 from .model_manager import ensure_model_available
@@ -191,6 +194,34 @@ def open_batch_job_output(job_id: str) -> dict[str, str]:
     except OSError as exc:
         raise HTTPException(status_code=400, detail=f"Cannot open output directory: {exc}") from exc
     return {"status": "ok", "path": str(output_path)}
+
+
+@app.get("/api/batch-jobs/{job_id}/download")
+def download_batch_job_output(job_id: str) -> FileResponse:
+    job = get_batch_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+    output_path = Path(job.outputDir).expanduser()
+    if not output_path.exists() or not output_path.is_dir():
+        raise HTTPException(status_code=404, detail="Output directory not found")
+
+    archive = tempfile.NamedTemporaryFile(prefix=f"image-crop-{job_id}-", suffix=".zip", delete=False)
+    archive_path = Path(archive.name)
+    archive.close()
+    try:
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
+            for path in sorted(item for item in output_path.rglob("*") if item.is_file()):
+                zip_file.write(path, path.relative_to(output_path))
+    except OSError as exc:
+        archive_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Cannot create output archive: {exc}") from exc
+
+    return FileResponse(
+        archive_path,
+        media_type="application/zip",
+        filename=f"image-crop-{job_id}.zip",
+        background=BackgroundTask(lambda: archive_path.unlink(missing_ok=True)),
+    )
 
 
 @app.patch("/api/batch-jobs/{job_id}/review", response_model=BatchJob)

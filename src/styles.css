@@ -845,6 +845,18 @@
     @apply inline-grid min-h-[30px] w-[min(360px,100%)] grid-cols-[16px_minmax(0,1fr)] items-center gap-1.5 rounded-md border border-[#d7e2df] bg-[#f2f8f6] px-2 text-left text-[#17655d];
   }
 
+  .output-actions {
+    @apply flex min-w-[280px] items-center gap-1.5;
+  }
+
+  .download-output-button {
+    @apply inline-flex min-h-[30px] flex-none items-center gap-1.5 rounded-md border border-[#cfd8e1] bg-white px-2.5 text-[#34506f];
+  }
+
+  .download-output-button:disabled {
+    @apply cursor-not-allowed opacity-55;
+  }
+
   .test-source-preview {
     @apply max-h-[360px] w-full rounded-lg border object-contain;
   }

@@ -2,7 +2,7 @@ FROM oven/bun:1 AS build
 
 WORKDIR /app
 
-COPY package.json bun.lock tsconfig.json tsconfig.node.json vite.config.ts index.html ./
+COPY package.json bun.lock tsconfig.json tsconfig.node.json vite.config.ts postcss.config.js tailwind.config.js index.html ./
 COPY src ./src
 RUN bun install --frozen-lockfile
 RUN bun run build

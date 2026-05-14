@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, FolderInput, ImageUp, Play, RotateCcw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, FolderInput, ImageUp, Play, RotateCcw, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CropCard } from "../components/CropCard";
 import type { BatchJob, CropScene, PoseProviderId, ProcessResponse, ReviewStatus } from "../types";
@@ -262,6 +262,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
     }
   };
 
+  const downloadOutput = (job: BatchJob) => {
+    window.location.href = `/api/batch-jobs/${job.id}/download`;
+  };
+
   return (
     <section className="work-page batch-job-page">
       <div className="control-panel job-control-panel">
@@ -420,10 +424,21 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
                     <td>{job.sceneName}</td>
                     <td>{job.imageCount} / {job.outputCount}</td>
                     <td>
-                      <button type="button" className="output-dir-button" onClick={(event) => { event.stopPropagation(); void openOutputDir(job); }}>
-                        <FolderInput size={14} />
-                        <span>{job.outputDir}</span>
-                      </button>
+                      <div className="output-actions">
+                        <button type="button" className="output-dir-button" onClick={(event) => { event.stopPropagation(); void openOutputDir(job); }}>
+                          <FolderInput size={14} />
+                          <span>{job.outputDir}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="download-output-button"
+                          disabled={job.outputCount === 0}
+                          onClick={(event) => { event.stopPropagation(); downloadOutput(job); }}
+                        >
+                          <Download size={14} />
+                          下载
+                        </button>
+                      </div>
                     </td>
                     <td><span className={`status-pill ${job.status === "completed" ? "ready" : "incomplete"}`}>{job.status === "completed" ? "完成" : "失败"}</span></td>
                     <td><span className={`status-pill ${reviewClass(job.reviewStatus)}`}>{reviewLabel(job.reviewStatus)}</span></td>

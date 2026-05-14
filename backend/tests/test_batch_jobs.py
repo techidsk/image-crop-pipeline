@@ -1,8 +1,12 @@
 import json
 import sqlite3
+import zipfile
+from io import BytesIO
 
 import pytest
+from fastapi.testclient import TestClient
 
+from backend.app.main import app
 from backend.app import batch_store
 from backend.app.schemas import BatchJob, BatchJobImage
 
@@ -108,3 +112,38 @@ def test_update_batch_job_image_review_status_rejects_unknown_image(isolated_bat
 
     with pytest.raises(ValueError):
         batch_store.update_batch_job_image_review_status("job-1", "missing.jpg", "rejected")
+
+
+def test_download_batch_job_output_returns_zip(isolated_batch_store, tmp_path):
+    output_dir = tmp_path / "outputs" / "job-1"
+    preset_dir = output_dir / "preset-a"
+    preset_dir.mkdir(parents=True)
+    (preset_dir / "crop.png").write_bytes(b"png-bytes")
+    batch_store.append_batch_job(make_job().model_copy(update={"outputDir": str(output_dir)}))
+
+    response = TestClient(app).get("/api/batch-jobs/job-1/download")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert "image-crop-job-1.zip" in response.headers["content-disposition"]
+    with zipfile.ZipFile(BytesIO(response.content)) as archive:
+        assert archive.namelist() == ["preset-a/crop.png"]
+        assert archive.read("preset-a/crop.png") == b"png-bytes"
+
+
+def test_download_batch_job_output_rejects_missing_job(isolated_batch_store):
+    response = TestClient(app).get("/api/batch-jobs/missing/download")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Batch job not found"
+
+
+def test_download_batch_job_output_rejects_missing_output_dir(isolated_batch_store, tmp_path):
+    batch_store.append_batch_job(
+        make_job().model_copy(update={"outputDir": str(tmp_path / "missing")})
+    )
+
+    response = TestClient(app).get("/api/batch-jobs/job-1/download")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Output directory not found"
