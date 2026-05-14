@@ -14,6 +14,7 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import ValidationError
 
 from .cropping import make_crop
+from .model_manager import ensure_model_available
 from .pose import Pose, make_pose_provider
 from .batch_store import (
     append_batch_job,
@@ -54,6 +55,7 @@ from .view_classifier import classify_view
 
 app = FastAPI(title="OpenPose Crop Pipeline")
 POSE_DETECT_MAX_SIDE = int(os.getenv("POSE_DETECT_MAX_SIDE", "1280"))
+ensure_model_available()
 pose_providers = {"heuristic": make_pose_provider("heuristic")}
 try:
     pose_providers["rtmw"] = make_pose_provider("rtmw")

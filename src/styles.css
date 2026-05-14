@@ -1,3 +1,5 @@
+@config "../tailwind.config.js";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,6 +7,19 @@
 @layer base {
   :root {
     @apply bg-canvas font-sans text-[#182026];
+    --background: 0 0% 100%;
+    --foreground: 215 24% 15%;
+    --primary: 174 58% 26%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 92%;
+    --secondary-foreground: 214 20% 22%;
+    --accent: 160 18% 94%;
+    --accent-foreground: 174 58% 24%;
+    --destructive: 0 58% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 17% 84%;
+    --input: 210 17% 84%;
+    --ring: 174 58% 32%;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
   }
@@ -137,6 +152,10 @@
 
   .provider-select {
     @apply gap-1.5 text-xs text-muted;
+  }
+
+  .form-field {
+    @apply flex flex-col gap-1.5;
   }
 
   .provider-select select,
@@ -697,7 +716,7 @@
   }
 
   .scene-detail-panel {
-    @apply flex flex-col gap-3.5 px-4 pb-4 pt-0;
+    @apply flex flex-col gap-4 px-4 pb-4 pt-0;
   }
 
   .scene-detail-head {
@@ -710,7 +729,23 @@
 
   .scene-form-grid,
   .preset-test-grid {
-    @apply gap-2.5 lg:grid-cols-2;
+    @apply gap-3 lg:grid-cols-2;
+  }
+
+  .scene-detail-panel .form-field {
+    @apply gap-1.5;
+  }
+
+  .scene-status-select {
+    @apply flex h-10 w-full rounded-md border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] ring-offset-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] focus:ring-offset-2;
+  }
+
+  .scene-detail-head .row-actions {
+    @apply flex-nowrap gap-2;
+  }
+
+  .scene-detail-head .icon-button {
+    @apply h-9 min-h-9 w-9 rounded-md p-0;
   }
 
   .preset-tag-binding {
@@ -721,12 +756,20 @@
     @apply text-xs font-bold text-[#52606f];
   }
 
+  .preset-binding-tools {
+    @apply flex flex-col gap-2 rounded-lg border border-[#edf0ec] bg-white p-2.5;
+  }
+
+  .preset-binding-tools .input-with-icon {
+    @apply min-w-0;
+  }
+
   .scene-preset-grid {
     @apply max-h-[340px] grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-2 overflow-auto;
   }
 
   .scene-preset-grid button {
-    @apply flex min-h-[62px] items-center px-3 py-2.5;
+    @apply flex min-h-[64px] items-center rounded-md px-3 py-2.5;
   }
 
   .scene-preset-grid button.active,
@@ -911,7 +954,7 @@
   }
 
   .editor-card {
-    @apply gap-3 p-[18px];
+    @apply flex flex-col gap-3.5 p-[18px];
   }
 
   .grid-two {
@@ -919,16 +962,20 @@
   }
 
   .training-meta {
-    @apply items-center gap-2 lg:grid-cols-[120px_repeat(3,minmax(150px,1fr))];
+    @apply items-stretch gap-2 sm:grid-cols-2 xl:grid-cols-[120px_repeat(3,minmax(160px,1fr))];
   }
 
   .sample-count {
     @apply min-h-10 rounded-md bg-[#edf3f2] text-[13px] font-bold text-primary;
   }
 
-  .save-incomplete-button,
-  .calibrate-button {
-    @apply w-full;
+  .training-meta button,
+  .training-editor .section-header button {
+    @apply min-h-10 w-full justify-center px-3 py-2 text-[13px] font-bold leading-tight;
+  }
+
+  .training-editor .section-header button {
+    @apply w-auto;
   }
 
   .calibrate-button.ready,
@@ -1027,8 +1074,6 @@
   .pose-toggle,
   .preview-crop-button,
   .confirm-crop-button,
-  .reanalyze-samples-button,
-  .save-incomplete-button,
   .upload-samples-button {
     @apply min-h-[34px] w-max justify-start px-2.5;
   }

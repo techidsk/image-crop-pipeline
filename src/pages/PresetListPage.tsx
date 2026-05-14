@@ -18,7 +18,7 @@ export function PresetListPage({ allTags, presets, onAdd, onDuplicate, onEdit, o
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [testingPreset, setTestingPreset] = useState<CropPreset | null>(null);
   const visiblePresets = presets.filter((preset) => {
-    const text = `${preset.name} ${preset.tags.join(" ")} ${preset.status ?? ""} ${viewAngleLabels[preset.orientation ?? "front"]} ${preset.note ?? ""}`.toLowerCase();
+    const text = `${preset.name} ${preset.tags.join(" ")} ${preset.status ?? ""} ${viewAngleText(preset)} ${preset.note ?? ""}`.toLowerCase();
     return text.includes(query.toLowerCase()) && activeTags.every((tag) => preset.tags.includes(tag));
   });
 
@@ -60,7 +60,7 @@ export function PresetListPage({ allTags, presets, onAdd, onDuplicate, onEdit, o
             <tr>
               <th>预设</th>
               <th>状态</th>
-              <th>朝向</th>
+              <th>适用视角</th>
               <th>输出尺寸</th>
               <th>标签</th>
               <th>说明</th>
@@ -78,7 +78,7 @@ export function PresetListPage({ allTags, presets, onAdd, onDuplicate, onEdit, o
                   <span className={`status-pill ${preset.status ?? "draft"}`}>{statusLabel(preset)}</span>
                 </td>
                 <td>
-                  <span className="orientation-pill">{viewAngleLabels[preset.orientation ?? "front"]}</span>
+                  <span className="orientation-pill">{viewAngleText(preset)}</span>
                 </td>
                 <td>
                   {preset.width}x{preset.height}
@@ -205,7 +205,7 @@ function PresetTestPanel({
       <div className="page-header">
         <div>
           <h2>测试预设：{preset.name}</h2>
-          <p>{preset.width}x{preset.height} · {viewAngleLabels[preset.orientation ?? "front"]} · {statusLabel(preset)}</p>
+          <p>{preset.width}x{preset.height} · {viewAngleText(preset)} · {statusLabel(preset)}</p>
         </div>
         <button type="button" className="back-button" onClick={onClose}>
           <X size={17} />
@@ -274,6 +274,11 @@ function PresetTestPanel({
       </div>
     </section>
   );
+}
+
+function viewAngleText(preset: CropPreset) {
+  const angles = preset.viewAngles?.length ? preset.viewAngles : [preset.orientation ?? "front"];
+  return angles.map((viewAngle) => viewAngleLabels[viewAngle]).join(" / ");
 }
 
 function statusLabel(preset: CropPreset) {

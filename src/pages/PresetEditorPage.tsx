@@ -3,6 +3,10 @@ import { ChevronLeft, ImageUp, Plus, RefreshCw, Save, Wand2, X } from "lucide-re
 import { viewAngleLabels } from "../constants";
 import { NumberField } from "../components/NumberField";
 import { TrainingCard } from "../components/TrainingCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { CropPreset, LearnedComposition, PoseProviderId, TrainingSample, ViewAngle } from "../types";
 import {
   compositionForSample,
@@ -302,16 +306,21 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
     const nextAngles = checked
       ? Array.from(new Set([...activeViewAngles, viewAngle]))
       : activeViewAngles.filter((item) => item !== viewAngle);
-    onUpdate(preset.id, { viewAngles: nextAngles.length > 0 ? nextAngles : activeViewAngles });
+    if (nextAngles.length === 0) return;
+
+    onUpdate(preset.id, {
+      viewAngles: nextAngles,
+      orientation: nextAngles.includes(preset.orientation ?? "front") ? preset.orientation : nextAngles[0]
+    });
   };
 
   return (
     <section className="editor-page">
       <div className="page-header">
-        <button type="button" className="back-button" onClick={onBack}>
+        <Button type="button" variant="secondary" className="back-button" onClick={onBack}>
           <ChevronLeft size={17} />
           <span>返回</span>
-        </button>
+        </Button>
         <div>
           <h2>{preset.name}</h2>
           <p>编辑元数据、裁切参数和训练策略</p>
@@ -320,23 +329,28 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
       <div className="editor-grid">
         <section className="editor-card">
           <h2>基础信息</h2>
-          <label>
-            名称
-            <input value={preset.name} onChange={(event) => onUpdate(preset.id, { name: event.target.value })} />
-          </label>
+          <div className="form-field">
+            <Label htmlFor={`preset-name-${preset.id}`}>名称</Label>
+            <Input
+              id={`preset-name-${preset.id}`}
+              value={preset.name}
+              onChange={(event) => onUpdate(preset.id, { name: event.target.value })}
+            />
+          </div>
           <TagManager
             tags={preset.tags}
             allTags={allTags}
             onChange={(tags) => onUpdate(preset.id, { tags })}
           />
-          <label>
-            状态说明
-            <textarea
+          <div className="form-field">
+            <Label htmlFor={`preset-note-${preset.id}`}>状态说明</Label>
+            <Textarea
+              id={`preset-note-${preset.id}`}
               value={preset.note ?? ""}
               placeholder="这里会记录样本不足、训练完成等状态说明"
               onChange={(event) => onUpdate(preset.id, { note: event.target.value })}
             />
-          </label>
+          </div>
           <div className="grid-two">
             <NumberField label="宽" value={preset.width} onChange={(width) => onUpdate(preset.id, { width })} />
             <NumberField label="高" value={preset.height} onChange={(height) => onUpdate(preset.id, { height })} />
@@ -360,32 +374,19 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             </label>
           </div>
           <div className="field-group">
-            <span>朝向</span>
-            <div className="orientation-options" role="radiogroup" aria-label="预设朝向">
+            <span>适用视角</span>
+            <div className="crop-guard-options" aria-label="适用视角">
               {viewAngles.map((viewAngle) => (
-                <label className="radio-chip" key={viewAngle}>
+                <label className="checkbox-row" key={viewAngle}>
                   <input
-                    type="radio"
-                    name={`orientation-${preset.id}`}
-                    checked={(preset.orientation ?? "front") === viewAngle}
-                    onChange={() => onUpdate(preset.id, { orientation: viewAngle })}
+                    type="checkbox"
+                    checked={activeViewAngles.includes(viewAngle)}
+                    onChange={(event) => toggleViewAngle(viewAngle, event.target.checked)}
                   />
                   <span>{viewAngleLabels[viewAngle]}</span>
                 </label>
               ))}
             </div>
-          </div>
-          <div className="crop-guard-options" aria-label="适用视角">
-            {viewAngles.map((viewAngle) => (
-              <label className="checkbox-row" key={viewAngle}>
-                <input
-                  type="checkbox"
-                  checked={activeViewAngles.includes(viewAngle)}
-                  onChange={(event) => toggleViewAngle(viewAngle, event.target.checked)}
-                />
-                <span>{viewAngleLabels[viewAngle]}</span>
-              </label>
-            ))}
           </div>
           <div className={`preset-status ${preset.status ?? "draft"}`}>
             {preset.status === "ready" ? "正式策略" : preset.status === "incomplete" ? "残缺策略" : "草稿"}
@@ -398,10 +399,10 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
               <h2>训练</h2>
               <p>上传原图并手动画裁切框，最少 5 组</p>
             </div>
-            <button type="button" className="upload-samples-button" onClick={() => trainingInputRef.current?.click()}>
+            <Button type="button" className="upload-samples-button" onClick={() => trainingInputRef.current?.click()}>
               <ImageUp size={17} />
               <span>上传样本</span>
-            </button>
+            </Button>
           </div>
           <input
             ref={trainingInputRef}
@@ -416,7 +417,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
           />
           <div className="training-meta">
             <div className="sample-count">{trainSamples.length}/5 训练样本</div>
-            <button
+            <Button
               className="reanalyze-samples-button"
               type="button"
               onClick={reanalyzeUnknownSamples}
@@ -424,12 +425,12 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             >
               <RefreshCw size={17} />
               <span>重新识别未知样本</span>
-            </button>
-            <button className="save-incomplete-button" type="button" onClick={saveIncompletePreset} disabled={trainSamples.length === 0 || isAnalyzing}>
+            </Button>
+            <Button className="save-incomplete-button" type="button" onClick={saveIncompletePreset} disabled={trainSamples.length === 0 || isAnalyzing}>
               <Save size={17} />
               <span>保存残缺策略</span>
-            </button>
-            <button
+            </Button>
+            <Button
               className={`calibrate-button ${trainSamples.length >= 5 ? "ready" : ""}`}
               type="button"
               onClick={trainPreset}
@@ -437,7 +438,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             >
               <Wand2 size={17} />
               <span>{isAnalyzing ? "识别中" : "确认开始训练构图策略"}</span>
-            </button>
+            </Button>
           </div>
           {trainingMessage && <p className="calibration-message">{trainingMessage}</p>}
           <div className="training-workspace">
@@ -525,16 +526,16 @@ function TagManager({
         <span>标签</span>
         <div className="managed-tags" aria-label="当前标签">
           {normalizedTags.map((tag) => (
-            <button key={tag} type="button" className="managed-tag" onClick={() => removeTag(tag)} title={`移除 ${tag}`}>
+            <Button key={tag} type="button" variant="secondary" className="managed-tag" onClick={() => removeTag(tag)} title={`移除 ${tag}`}>
               <span>{tag}</span>
               <X size={14} />
-            </button>
+            </Button>
           ))}
           {normalizedTags.length === 0 && <span className="empty-tags">尚未添加标签</span>}
         </div>
       </div>
       <div className="tag-add-row">
-        <input
+        <Input
           value={draftTag}
           placeholder="portrait"
           aria-label="新增标签"
@@ -549,10 +550,10 @@ function TagManager({
             }
           }}
         />
-        <button type="button" className="add-tag-button" onClick={() => addTag(draftTag)}>
+        <Button type="button" className="add-tag-button" onClick={() => addTag(draftTag)}>
           <Plus size={16} />
           <span>添加</span>
-        </button>
+        </Button>
       </div>
       {tagError && <p className="tag-error">{tagError}</p>}
       {availableTags.length > 0 && (
@@ -560,9 +561,9 @@ function TagManager({
           <span>已有标签</span>
           <div className="tag-filter">
             {availableTags.map((tag) => (
-              <button key={tag} type="button" className="ghost-chip" onClick={() => addTag(tag)}>
+              <Button key={tag} type="button" variant="outline" className="ghost-chip" onClick={() => addTag(tag)}>
                 {tag}
-              </button>
+              </Button>
             ))}
           </div>
         </div>

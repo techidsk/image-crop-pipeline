@@ -51,6 +51,21 @@ docker compose up -d --build
 models/rtmw-l-384x288.onnx
 ```
 
+也可以在 `.env` 中开启启动时自动下载：
+
+```env
+MODEL_AUTO_DOWNLOAD=true
+RTMW_MODEL_URL=https://download.openmmlab.com/mmpose/v1/projects/rtmw/onnx_sdk/rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.zip
+```
+
+后端启动时会在 `RTMW_ONNX_PATH` 指向的文件不存在时下载模型。如果下载地址是 zip 包，会自动提取其中的 `.onnx` 文件。内网部署时建议把模型放到公司内网文件服务器，再把 `RTMW_MODEL_URL` 改成内网地址。需要校验文件完整性时，可以配置 `RTMW_MODEL_SHA256`。
+
+默认情况下，下载失败不会阻止服务启动，后端会继续使用轻量 `heuristic` 回退方案。如果希望模型下载失败时直接让服务启动失败，可以设置：
+
+```env
+MODEL_DOWNLOAD_REQUIRED=true
+```
+
 如果模型不存在，后端会回退到轻量 `heuristic` 方案，方便先跑通部署链路。批量任务里填写相对输出目录 `outputs` 时，容器会写入宿主机的 `./outputs` 目录。任务历史会写入 `backend/data/app.db`，预设和场景仍保留为 JSON，方便查看和版本管理。
 
 常用命令：

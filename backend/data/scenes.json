@@ -7,16 +7,20 @@
       "default"
     ],
     "description": "按当前可用预设批量生成运营素材。",
-    "presetIds": [
-      "portrait-1800-2000"
+    "presetIds": [],
+    "presets": [],
+    "status": "draft"
+  },
+  {
+    "id": "scene-1778577608407",
+    "name": "新品牌场景",
+    "brand": "",
+    "tags": [
+      "draft"
     ],
-    "presets": [
-      {
-        "presetId": "portrait-1800-2000",
-        "enabled": true,
-        "alias": ""
-      }
-    ],
+    "description": "",
+    "presetIds": [],
+    "presets": [],
     "status": "draft"
   }
 ]

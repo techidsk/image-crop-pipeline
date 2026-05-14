@@ -32,6 +32,14 @@
       "semanticWidth": 1.921,
       "explanation": "上边界按头顶，下边界按大腿50%"
     },
+    "protectHead": false,
+    "protectHands": false,
+    "orientation": "front",
+    "viewAngles": [
+      "front",
+      "side",
+      "back"
+    ],
     "status": "ready",
     "note": "训练完成：使用 5/5 组训练样本，过滤 0 组偏差样本。"
   },
@@ -50,6 +58,38 @@
     "offsetY": -180.0,
     "scale": 1.0,
     "composition": null,
+    "protectHead": false,
+    "protectHands": false,
+    "orientation": "front",
+    "viewAngles": [
+      "front",
+      "side",
+      "back"
+    ],
+    "status": "draft",
+    "note": ""
+  },
+  {
+    "id": "preset-1778693560160",
+    "name": "OB-2",
+    "tags": [
+      "ob"
+    ],
+    "width": 1800,
+    "height": 2000,
+    "anchor": "neck",
+    "strategy": "anchor_center",
+    "offsetX": 0.0,
+    "offsetY": 0.0,
+    "scale": 1.0,
+    "composition": null,
+    "protectHead": false,
+    "protectHands": false,
+    "orientation": "back",
+    "viewAngles": [
+      "back",
+      "side"
+    ],
     "status": "draft",
     "note": ""
   }

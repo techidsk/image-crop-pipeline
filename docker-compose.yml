@@ -9,9 +9,13 @@ services:
       RTMW_ONNX_PATH: ${RTMW_ONNX_PATH:-models/rtmw-l-384x288.onnx}
       RTMW_INPUT_WIDTH: ${RTMW_INPUT_WIDTH:-288}
       RTMW_INPUT_HEIGHT: ${RTMW_INPUT_HEIGHT:-384}
+      MODEL_AUTO_DOWNLOAD: ${MODEL_AUTO_DOWNLOAD:-false}
+      MODEL_DOWNLOAD_REQUIRED: ${MODEL_DOWNLOAD_REQUIRED:-false}
+      RTMW_MODEL_URL: ${RTMW_MODEL_URL:-https://download.openmmlab.com/mmpose/v1/projects/rtmw/onnx_sdk/rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.zip}
+      RTMW_MODEL_SHA256: ${RTMW_MODEL_SHA256:-}
     volumes:
       - ./backend/data:/app/backend/data
-      - ./models:/app/models:ro
+      - ./models:/app/models
       - ./outputs:/app/outputs
     ports:
       - "8000:8000"

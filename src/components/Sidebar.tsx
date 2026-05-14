@@ -10,7 +10,6 @@ type SidebarProps = {
 };
 
 export function Sidebar({ view, error, poseProvider, onNavigate, onPoseProviderChange }: SidebarProps) {
-  const workflowSteps = ["上传", "姿态", "视角", "预设", "裁切", "输出"];
 
   return (
     <aside className="app-sidebar">
@@ -54,18 +53,6 @@ export function Sidebar({ view, error, poseProvider, onNavigate, onPoseProviderC
           </button>
         </div>
       </nav>
-
-      <div className="pipeline-card" aria-label="Pipeline stages">
-        <div className="pipeline-card-head">
-          <ListChecks size={16} />
-          <strong>后端处理阶段</strong>
-        </div>
-        <ol>
-          {workflowSteps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </div>
 
       <label className="provider-select">
         姿态引擎
