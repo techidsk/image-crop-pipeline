@@ -76,6 +76,28 @@ docker compose restart backend
 docker compose down
 ```
 
+从本机一键更新测试服务器：
+
+```powershell
+.\scripts\deploy.ps1
+```
+
+脚本默认部署到 SSH 别名 `image-crop-server` 指向的 `/home/molook/code/image-crop-pipeline`，会打包当前提交、同步到服务器、更新运行中的后端和前端容器，并做健康检查。执行过程中会打印本地和远端的分步进度日志。默认 `patch` 模式不依赖 Docker Hub 拉取基础镜像，适合内网或 Docker Hub 不稳定时使用。需要完整重建镜像时：
+
+```powershell
+.\scripts\deploy.ps1 -Mode full
+```
+
+脚本不会保存 SSH 密码。建议在本机 `~/.ssh/config` 配置：
+
+```sshconfig
+Host image-crop-server
+  HostName 10.31.0.104
+  User molook
+  IdentityFile ~/.ssh/id_ed25519_image_crop_deploy
+  IdentitiesOnly yes
+```
+
 ## 裁切预设
 
 每个预设包含：
