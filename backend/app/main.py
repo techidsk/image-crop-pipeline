@@ -614,10 +614,14 @@ async def run_batch_job_stream(
     output_dir: str = Form(...),
     pose_provider: str = Form("rtmw"),
 ) -> StreamingResponse:
+    # StreamingResponse 消费 events() 时 FastAPI 已经关闭了上传文件的临时文件，
+    # 因此必须在返回前把图片字节读进内存。
+    uploaded = [(image.filename or "image", await image.read()) for image in images]
+
     async def events():
         job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
         created_at = datetime.now().isoformat(timespec="seconds")
-        total = len(images)
+        total = len(uploaded)
         try:
             actual_provider = resolve_pose_provider_name(pose_provider)
             scenes = load_scenes()
@@ -647,11 +651,11 @@ async def run_batch_job_stream(
                         createdAt=created_at,
                         images=[
                             BatchJobImage(
-                                filename=image.filename or "image",
+                                filename=filename,
                                 outputs=0,
                                 error="场景没有可用预设，请先在场景管理中绑定预设。",
                             )
-                            for image in images
+                            for filename, _ in uploaded
                         ],
                     )
                 )
@@ -679,11 +683,11 @@ async def run_batch_job_stream(
                         createdAt=created_at,
                         images=[
                             BatchJobImage(
-                                filename=image.filename or "image",
+                                filename=filename,
                                 outputs=0,
                                 error=f"输出目录不可写：{exc}",
                             )
-                            for image in images
+                            for filename, _ in uploaded
                         ],
                     )
                 )
@@ -702,8 +706,7 @@ async def run_batch_job_stream(
 
             results: list[ProcessResponse] = []
             image_reports: list[BatchJobImage] = []
-            for index, image in enumerate(images, start=1):
-                filename = image.filename or "image"
+            for index, (filename, raw) in enumerate(uploaded, start=1):
                 yield ndjson_event(
                     {
                         "type": "active",
@@ -714,7 +717,8 @@ async def run_batch_job_stream(
                     }
                 )
                 try:
-                    result = await process_upload_to_output_dir(image, crop_presets, job_dir, actual_provider)
+                    upload = UploadFile(file=BytesIO(raw), filename=filename)
+                    result = await process_upload_to_output_dir(upload, crop_presets, job_dir, actual_provider)
                     results.append(result)
                     report = BatchJobImage(filename=filename, outputs=len(result.crops))
                     image_reports.append(report)
@@ -767,7 +771,31 @@ async def run_batch_job_stream(
                 }
             )
         except Exception as exc:
-            yield ndjson_event({"type": "error", "message": str(exc)})
+            try:
+                job = append_batch_job(
+                    BatchJob(
+                        id=job_id,
+                        sceneId=scene_id,
+                        sceneName=scene_id,
+                        poseProvider=pose_provider,
+                        outputDir=output_dir,
+                        imageCount=total,
+                        outputCount=0,
+                        status="failed",
+                        createdAt=created_at,
+                        images=[
+                            BatchJobImage(filename=filename, outputs=0, error=str(exc))
+                            for filename, _ in uploaded
+                        ],
+                    )
+                )
+            except Exception as store_exc:
+                print(f"流式任务失败且无法写入任务记录: {store_exc}", flush=True)
+                yield ndjson_event({"type": "error", "message": str(exc)})
+                return
+            yield ndjson_event(
+                {"type": "error", "message": str(exc), "job": job.model_dump(mode="json")}
+            )
 
     return StreamingResponse(events(), media_type="application/x-ndjson")
 

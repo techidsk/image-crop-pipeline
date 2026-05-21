@@ -16,7 +16,7 @@ type StreamEvent =
   | { type: "active"; jobId: string; completed: number; total: number; filename: string }
   | { type: "progress"; jobId: string; completed: number; total: number; filename: string; outputs: number; error?: string; result?: ProcessResponse }
   | { type: "final"; job: BatchJob; images: ProcessResponse[] }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; job?: BatchJob };
 
 type RunProgress = {
   jobId: string;
@@ -206,6 +206,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       return;
     }
     if (event.type === "error") {
+      if (event.job) onJobCreated(event.job);
       setError(event.message);
     }
   };
