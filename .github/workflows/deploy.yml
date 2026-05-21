@@ -41,7 +41,10 @@ jobs:
 
       - name: 构建前端静态资源
         run: |
-          npm ci
+          # package-lock.json 在 Windows 上生成，缺 Linux 版 rollup 原生模块，
+          # npm ci 严格按 lockfile 装会漏掉它；删除后用 npm install 按当前平台重新解析（npm/cli#4828）。
+          rm -rf node_modules package-lock.json
+          npm install
           npm run build
 
       - name: 更新前端容器并固化镜像
