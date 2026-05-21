@@ -13,6 +13,12 @@ services:
       MODEL_DOWNLOAD_REQUIRED: ${MODEL_DOWNLOAD_REQUIRED:-false}
       RTMW_MODEL_URL: ${RTMW_MODEL_URL:-https://download.openmmlab.com/mmpose/v1/projects/rtmw/onnx_sdk/rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.zip}
       RTMW_MODEL_SHA256: ${RTMW_MODEL_SHA256:-}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-file}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-}
+      OSS_BUCKET: ${OSS_BUCKET:-}
+      OSS_PREFIX: ${OSS_PREFIX:-image-crop-pipeline/}
     volumes:
       - ./backend/data:/app/backend/data
       - ./models:/app/models

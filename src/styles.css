@@ -154,6 +154,42 @@
     @apply gap-1.5 text-xs text-muted;
   }
 
+  .storage-status {
+    @apply flex flex-col gap-1.5 rounded-md border border-[#cfd8e1] bg-white/70 p-2 text-xs;
+  }
+
+  .storage-status-head {
+    @apply flex items-center justify-between font-bold text-ink;
+  }
+
+  .storage-status-head span {
+    @apply flex items-center gap-1;
+  }
+
+  .storage-status-head button {
+    @apply flex items-center gap-1 rounded border border-[#cfd8e1] bg-white px-1.5 py-0.5 text-[11px] font-semibold text-muted hover:text-ink disabled:opacity-60;
+  }
+
+  .storage-row {
+    @apply flex items-center justify-between text-muted;
+  }
+
+  .storage-badge {
+    @apply rounded px-1.5 py-0.5 text-[11px] font-semibold;
+  }
+
+  .storage-row.synced .storage-badge {
+    @apply bg-[#e3f2ec] text-[#1f7a55];
+  }
+
+  .storage-row.pending .storage-badge {
+    @apply bg-[#fdf0d8] text-[#9a6b12];
+  }
+
+  .storage-row.unknown .storage-badge {
+    @apply bg-[#eef0f2] text-[#6b7785];
+  }
+
   .form-field {
     @apply flex flex-col gap-1.5;
   }

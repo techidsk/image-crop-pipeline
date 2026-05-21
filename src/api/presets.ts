@@ -43,3 +43,28 @@ export async function fetchBatchJobs() {
   if (!response.ok) throw new Error("任务记录加载失败");
   return (await response.json()) as BatchJob[];
 }
+
+export type StorageCollectionStatus = {
+  status: "synced" | "pending" | "unknown";
+  lastSyncedAt: string | null;
+  lastError: string | null;
+};
+
+export type StorageStatus = {
+  provider: "file" | "oss";
+  cloudSync: boolean;
+  bucket?: string;
+  collections: Record<string, StorageCollectionStatus>;
+};
+
+export async function fetchStorageStatus() {
+  const response = await fetch("/api/storage/status");
+  if (!response.ok) throw new Error("存储状态加载失败");
+  return (await response.json()) as StorageStatus;
+}
+
+export async function triggerStorageSync() {
+  const response = await fetch("/api/storage/sync", { method: "POST" });
+  if (!response.ok) throw new Error("云端同步失败");
+  return (await response.json()) as StorageStatus;
+}

@@ -28,6 +28,7 @@ from .batch_store import (
 )
 from .preset_store import load_presets, save_presets
 from .scene_store import load_scenes, save_scenes
+from .storage_provider import get_storage_status, sync_now
 from .schemas import (
     BatchJob,
     BatchJobImage,
@@ -59,6 +60,10 @@ from .view_classifier import classify_view
 app = FastAPI(title="OpenPose Crop Pipeline")
 POSE_DETECT_MAX_SIDE = int(os.getenv("POSE_DETECT_MAX_SIDE", "1280"))
 ensure_model_available()
+try:
+    sync_now(force=False)
+except Exception as exc:
+    print(f"启动时云端同步检查失败: {exc}", flush=True)
 pose_providers = {"heuristic": make_pose_provider("heuristic")}
 try:
     pose_providers["rtmw"] = make_pose_provider("rtmw")
@@ -169,6 +174,16 @@ def get_scenes() -> list[CropScene]:
 @app.put("/api/scenes", response_model=list[CropScene])
 def put_scenes(scenes: list[CropScene]) -> list[CropScene]:
     return save_scenes(scenes)
+
+
+@app.get("/api/storage/status")
+def storage_status() -> dict:
+    return get_storage_status()
+
+
+@app.post("/api/storage/sync")
+def storage_sync() -> dict:
+    return sync_now(force=True)
 
 
 @app.get("/api/batch-jobs", response_model=list[BatchJob])

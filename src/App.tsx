@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
-import { fetchBatchJobs, fetchPresets, fetchScenes, persistPresets, persistScenes } from "./api/presets";
+import {
+  fetchBatchJobs,
+  fetchPresets,
+  fetchScenes,
+  fetchStorageStatus,
+  persistPresets,
+  persistScenes,
+  triggerStorageSync,
+  type StorageStatus
+} from "./api/presets";
 import { Sidebar } from "./components/Sidebar";
 import { defaultPresets } from "./constants";
 import { BatchPage } from "./pages/BatchPage";
@@ -61,12 +70,14 @@ export function App() {
   const [poseProvider, setPoseProvider] = useState<PoseProviderId>("rtmw");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const view = viewForPath(location.pathname);
 
   useEffect(() => {
     void loadPresets();
     void loadScenes();
     void loadJobs();
+    void loadStorageStatus();
   }, []);
 
   const allTags = useMemo(
@@ -103,6 +114,18 @@ export function App() {
     }
   };
 
+  const loadStorageStatus = async () => {
+    try {
+      setStorageStatus(await fetchStorageStatus());
+    } catch {
+      // 存储状态非关键功能，加载失败时静默忽略
+    }
+  };
+
+  const syncStorage = async () => {
+    setStorageStatus(await triggerStorageSync());
+  };
+
   const updateJob = (job: BatchJob) => {
     setJobs((current) => current.map((item) => (item.id === job.id ? job : item)));
   };
@@ -110,12 +133,14 @@ export function App() {
   const savePresets = async (nextPresets: CropPreset[]) => {
     setPresets(nextPresets);
     setPresets(await persistPresets(nextPresets));
+    void loadStorageStatus();
   };
 
   const saveScenes = async (nextScenes: CropScene[]) => {
     setScenes(nextScenes);
     try {
       setScenes(await persistScenes(nextScenes));
+      void loadStorageStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : "场景保存失败");
     }
@@ -174,8 +199,10 @@ export function App() {
         view={view}
         error={error}
         poseProvider={poseProvider}
+        storageStatus={storageStatus}
         onNavigate={navigateTo}
         onPoseProviderChange={setPoseProvider}
+        onSyncStorage={syncStorage}
       />
       <section className="page-shell">
         <Routes>

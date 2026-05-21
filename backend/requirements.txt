@@ -3,3 +3,4 @@ uvicorn[standard]==0.34.0
 pillow==11.0.0
 python-multipart==0.0.20
 pydantic==2.10.4
+oss2==2.19.1
