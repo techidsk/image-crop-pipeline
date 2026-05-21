@@ -1,0 +1,56 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # 在测试服务器本机的 self-hosted runner 上执行
+    runs-on: [self-hosted, image-crop-server]
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 更新后端容器代码
+        run: |
+          docker cp backend/app/. image-crop-backend:/app/backend/app/
+          docker restart image-crop-backend
+
+      - name: 等待后端健康检查
+        run: |
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8100/api/health >/dev/null; then
+              echo "后端已健康"
+              exit 0
+            fi
+            printf '.'
+            sleep 1
+          done
+          echo
+          echo "backend health timeout" >&2
+          exit 1
+
+      - name: 固化后端镜像
+        run: docker commit image-crop-backend image-crop-pipeline-backend:latest
+
+      - name: 构建前端静态资源
+        run: |
+          npm ci
+          npm run build
+
+      - name: 更新前端容器并固化镜像
+        run: |
+          docker cp dist/. image-crop-frontend:/usr/share/nginx/html/
+          docker commit image-crop-frontend image-crop-pipeline-frontend:latest
+
+      - name: 验证部署结果
+        run: |
+          curl -fsS -I http://127.0.0.1:8180/ | head -n 8
+          curl -fsS http://127.0.0.1:8100/api/health
+          echo
