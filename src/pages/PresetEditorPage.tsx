@@ -389,7 +389,13 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             </div>
           </div>
           <div className={`preset-status ${preset.status ?? "draft"}`}>
-            {preset.status === "ready" ? "正式策略" : preset.status === "incomplete" ? "残缺策略" : "草稿"}
+            {preset.status === "ready"
+              ? "正式策略"
+              : preset.status === "incomplete"
+                ? "残缺策略"
+                : preset.status === "archived"
+                  ? "已停用"
+                  : "草稿"}
           </div>
         </section>
 

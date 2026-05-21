@@ -164,16 +164,6 @@ export function App() {
     );
   };
 
-  const removePreset = (id: string) => {
-    const nextPresets = presets.filter((preset) => preset.id !== id);
-    if (location.pathname === pathForRoute("presetEditor", id)) {
-      navigateTo("presetList");
-    }
-    void savePresets(nextPresets).catch((err) =>
-      setError(err instanceof Error ? err.message : "预设保存失败")
-    );
-  };
-
   const openEditor = (id: string) => {
     navigateTo("presetEditor", id);
   };
@@ -238,7 +228,7 @@ export function App() {
                 onAdd={addPreset}
                 onDuplicate={duplicatePreset}
                 onEdit={openEditor}
-                onRemove={removePreset}
+                onSetStatus={(id, status) => updatePreset(id, { status })}
                 poseProvider={poseProvider}
               />
             }

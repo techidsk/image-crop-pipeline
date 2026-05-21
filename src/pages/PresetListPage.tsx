@@ -1,7 +1,21 @@
 import { useRef, useState } from "react";
-import { Copy, FlaskConical, ImageUp, Pencil, Plus, Play, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, FlaskConical, ImageUp, Pencil, Plus, Play, X } from "lucide-react";
 import { viewAngleLabels } from "../constants";
-import type { CropPreset, PoseProviderId, ProcessResponse } from "../types";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { CropPreset, PoseProviderId, PresetStatus, ProcessResponse } from "../types";
+
+const STATUS_META: Record<PresetStatus, { label: string; badge: string }> = {
+  draft: { label: "草稿", badge: "border-slate-200 bg-slate-100 text-slate-600" },
+  incomplete: { label: "残缺策略", badge: "border-amber-200 bg-amber-50 text-amber-700" },
+  ready: { label: "正式策略", badge: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  archived: { label: "已停用", badge: "border-rose-200 bg-rose-50 text-rose-600" }
+};
+
+const STATUS_FILTERS: PresetStatus[] = ["draft", "incomplete", "ready", "archived"];
+
+type StatusFilter = PresetStatus | "all";
 
 type PresetListPageProps = {
   allTags: string[];
@@ -9,111 +23,186 @@ type PresetListPageProps = {
   onAdd: () => void;
   onDuplicate: (preset: CropPreset) => void;
   onEdit: (id: string) => void;
-  onRemove: (id: string) => void;
+  onSetStatus: (id: string, status: PresetStatus) => void;
   poseProvider: PoseProviderId;
 };
 
-export function PresetListPage({ allTags, presets, onAdd, onDuplicate, onEdit, onRemove, poseProvider }: PresetListPageProps) {
-  const [query, setQuery] = useState("");
+export function PresetListPage({ allTags, presets, onAdd, onDuplicate, onEdit, onSetStatus, poseProvider }: PresetListPageProps) {
   const [activeTags, setActiveTags] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [testingPreset, setTestingPreset] = useState<CropPreset | null>(null);
   const visiblePresets = presets.filter((preset) => {
-    const text = `${preset.name} ${preset.tags.join(" ")} ${preset.status ?? ""} ${viewAngleText(preset)} ${preset.note ?? ""}`.toLowerCase();
-    return text.includes(query.toLowerCase()) && activeTags.every((tag) => preset.tags.includes(tag));
+    const status = preset.status ?? "draft";
+    if (statusFilter !== "all" && status !== statusFilter) return false;
+    return activeTags.every((tag) => preset.tags.includes(tag));
   });
 
   return (
-    <section className="management-page">
-      <div className="page-header">
-        <div>
-          <h2>预设管理</h2>
-          <p>检索、筛选、测试和进入单个预设编辑</p>
+    <section className="flex min-h-[calc(100vh-32px)] flex-col gap-4 rounded-lg border border-line bg-paper p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-base font-semibold text-ink">预设管理</h2>
+          <p className="text-xs text-muted">筛选、测试和进入单个预设编辑</p>
         </div>
-        <button type="button" onClick={onAdd}>
-          <Plus size={17} />
+        <Button type="button" onClick={onAdd}>
+          <Plus />
           <span>新建预设</span>
-        </button>
-      </div>
-      <div className="management-tools">
-        <input value={query} placeholder="搜索名称、标签、状态或说明" onChange={(event) => setQuery(event.target.value)} />
-        <div className="tag-filter">
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className={activeTags.includes(tag) ? "active" : ""}
-              onClick={() =>
-                setActiveTags((current) =>
-                  current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
-                )
-              }
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
+        </Button>
       </div>
 
-      <div className="preset-table-shell">
-        <table className="preset-data-table">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted">状态</span>
+          <Button
+            type="button"
+            size="sm"
+            variant={statusFilter === "all" ? "default" : "outline"}
+            onClick={() => setStatusFilter("all")}
+          >
+            全部
+          </Button>
+          {STATUS_FILTERS.map((status) => (
+            <Button
+              key={status}
+              type="button"
+              size="sm"
+              variant={statusFilter === status ? "default" : "outline"}
+              onClick={() => setStatusFilter(status)}
+            >
+              {STATUS_META[status].label}
+            </Button>
+          ))}
+        </div>
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted">标签</span>
+            {allTags.map((tag) => (
+              <Button
+                key={tag}
+                type="button"
+                size="sm"
+                variant={activeTags.includes(tag) ? "default" : "outline"}
+                onClick={() =>
+                  setActiveTags((current) =>
+                    current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+                  )
+                }
+              >
+                {tag}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-line">
+        <table className="w-full min-w-[900px] border-collapse text-sm">
           <thead>
-            <tr>
-              <th>预设</th>
-              <th>状态</th>
-              <th>适用视角</th>
-              <th>输出尺寸</th>
-              <th>标签</th>
-              <th>说明</th>
-              <th>操作</th>
+            <tr className="bg-[#f4f7f9] text-xs font-bold text-[#52606f]">
+              <th className="px-3.5 py-3 text-left">预设</th>
+              <th className="px-3.5 py-3 text-left">状态</th>
+              <th className="px-3.5 py-3 text-left">适用视角</th>
+              <th className="px-3.5 py-3 text-left">输出尺寸</th>
+              <th className="px-3.5 py-3 text-left">标签</th>
+              <th className="px-3.5 py-3 text-left">说明</th>
+              <th className="px-3.5 py-3 text-right">操作</th>
             </tr>
           </thead>
           <tbody>
-            {visiblePresets.map((preset) => (
-              <tr key={preset.id}>
-                <td>
-                  <strong>{preset.name}</strong>
-                  <span>{preset.id}</span>
-                </td>
-                <td>
-                  <span className={`status-pill ${preset.status ?? "draft"}`}>{statusLabel(preset)}</span>
-                </td>
-                <td>
-                  <span className="orientation-pill">{viewAngleText(preset)}</span>
-                </td>
-                <td>
-                  {preset.width}x{preset.height}
-                </td>
-                <td>
-                  <div className="row-tags compact">
-                    {preset.tags.map((tag) => (
-                      <span key={tag}>{tag}</span>
-                    ))}
-                  </div>
-                </td>
-                <td>
-                  <span className="table-note">{preset.note || "无说明"}</span>
-                </td>
-                <td>
-                  <div className="row-actions">
-                    <button type="button" className="icon-button" title="测试" onClick={() => setTestingPreset(preset)}>
-                      <FlaskConical size={15} />
-                    </button>
-                    <button type="button" className="icon-button" title="编辑" onClick={() => onEdit(preset.id)}>
-                      <Pencil size={15} />
-                    </button>
-                    <button type="button" className="icon-button" title="复制" onClick={() => onDuplicate(preset)}>
-                      <Copy size={15} />
-                    </button>
-                    <button type="button" className="icon-button danger" title="删除" onClick={() => onRemove(preset.id)}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {visiblePresets.map((preset) => {
+              const status = preset.status ?? "draft";
+              const archived = status === "archived";
+              return (
+                <tr
+                  key={preset.id}
+                  className={cn("border-t border-[#edf0f3] text-[13px] text-[#3a4654]", archived && "opacity-55")}
+                >
+                  <td className="px-3.5 py-3 align-middle">
+                    <div className="flex flex-col">
+                      <strong className="font-semibold text-ink">{preset.name}</strong>
+                      <span className="text-xs text-muted">{preset.id}</span>
+                    </div>
+                  </td>
+                  <td className="px-3.5 py-3 align-middle">
+                    <Badge variant="outline" className={STATUS_META[status].badge}>
+                      {STATUS_META[status].label}
+                    </Badge>
+                  </td>
+                  <td className="px-3.5 py-3 align-middle">
+                    <Badge variant="outline" className="border-[#d6ded7] bg-[#f2f7f5] text-[#2f5f58]">
+                      {viewAngleText(preset)}
+                    </Badge>
+                  </td>
+                  <td className="px-3.5 py-3 align-middle">
+                    {preset.width}x{preset.height}
+                  </td>
+                  <td className="px-3.5 py-3 align-middle">
+                    <div className="flex flex-wrap gap-1.5">
+                      {preset.tags.map((tag) => (
+                        <Badge key={tag} variant="secondary">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-3.5 py-3 align-middle">
+                    <span className="block max-w-[280px] truncate text-xs text-muted">{preset.note || "无说明"}</span>
+                  </td>
+                  <td className="px-3.5 py-3 align-middle">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title="测试"
+                        onClick={() => setTestingPreset(preset)}
+                      >
+                        <FlaskConical />
+                      </Button>
+                      <Button type="button" size="icon" variant="ghost" title="编辑" onClick={() => onEdit(preset.id)}>
+                        <Pencil />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title="复制"
+                        onClick={() => onDuplicate(preset)}
+                      >
+                        <Copy />
+                      </Button>
+                      {archived ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          title="恢复为草稿"
+                          onClick={() => onSetStatus(preset.id, "draft")}
+                        >
+                          <ArchiveRestore />
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          title="停用"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => onSetStatus(preset.id, "archived")}
+                        >
+                          <Archive />
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-        {visiblePresets.length === 0 && <div className="empty-state compact">没有匹配的预设</div>}
+        {visiblePresets.length === 0 && (
+          <div className="px-3.5 py-10 text-center text-sm text-muted">没有匹配的预设</div>
+        )}
       </div>
 
       {testingPreset && <PresetTestPanel preset={testingPreset} poseProvider={poseProvider} onClose={() => setTestingPreset(null)} />}
@@ -282,9 +371,7 @@ function viewAngleText(preset: CropPreset) {
 }
 
 function statusLabel(preset: CropPreset) {
-  if (preset.status === "ready") return "正式策略";
-  if (preset.status === "incomplete") return "残缺策略";
-  return "草稿";
+  return STATUS_META[preset.status ?? "draft"].label;
 }
 
 function providerLabel(provider: PoseProviderId | string) {

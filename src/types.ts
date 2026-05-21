@@ -4,7 +4,7 @@ export type ViewAngle = "front" | "side" | "back";
 export type ReviewStatus = "pending_review" | "approved" | "rejected";
 
 export type CropStrategy = "anchor_center" | "anchor_top" | "full_height" | "learned_composition" | "pose_semantic_composition";
-export type PresetStatus = "draft" | "incomplete" | "ready";
+export type PresetStatus = "draft" | "incomplete" | "ready" | "archived";
 
 export type LearnedComposition = {
   mode?: "bbox" | "pose_semantic";
