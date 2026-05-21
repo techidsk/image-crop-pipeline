@@ -94,6 +94,10 @@
     @apply justify-start;
   }
 
+  .app-version {
+    @apply font-mono text-[11px] tracking-tight text-muted/70;
+  }
+
   .mark {
     @apply grid h-[42px] w-[42px] place-items-center rounded-lg bg-primaryDark font-extrabold text-white;
   }

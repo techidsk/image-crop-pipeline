@@ -80,6 +80,9 @@ export function Sidebar({
         <div>
           <h1>Crop Pipeline</h1>
           <p>Python 工作流 · React 控制台</p>
+          <p className="app-version">
+            {__APP_VERSION__} · {__APP_COMMIT__}
+          </p>
         </div>
       </div>
       <nav className="side-nav" aria-label="Views">
