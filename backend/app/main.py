@@ -59,6 +59,18 @@ from .view_classifier import classify_view
 
 app = FastAPI(title="OpenPose Crop Pipeline")
 POSE_DETECT_MAX_SIDE = int(os.getenv("POSE_DETECT_MAX_SIDE", "1280"))
+
+
+def _open_output_dir_enabled() -> bool:
+    raw = os.getenv("ENABLE_OPEN_OUTPUT_DIR", "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return sys.platform.startswith("win")
+
+
+OPEN_OUTPUT_DIR_ENABLED = _open_output_dir_enabled()
 ensure_model_available()
 try:
     sync_now(force=False)
@@ -85,6 +97,11 @@ app.add_middleware(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/server-config")
+def server_config() -> dict[str, object]:
+    return {"features": {"openOutputDir": OPEN_OUTPUT_DIR_ENABLED}}
 
 
 def resolve_pose_provider_name(name: str | None = None) -> str:
@@ -230,6 +247,11 @@ def get_batch_jobs() -> list[BatchJob]:
 
 @app.post("/api/batch-jobs/{job_id}/open-output")
 def open_batch_job_output(job_id: str) -> dict[str, str]:
+    if not OPEN_OUTPUT_DIR_ENABLED:
+        raise HTTPException(
+            status_code=410,
+            detail="服务端未启用「打开输出目录」功能（部署在远程服务器时打开本地目录无意义）。",
+        )
     job = next((item for item in load_batch_jobs() if item.id == job_id), None)
     if job is None:
         raise HTTPException(status_code=404, detail="Batch job not found")

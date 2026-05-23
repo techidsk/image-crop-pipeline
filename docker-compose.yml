@@ -19,6 +19,7 @@ services:
       OSS_ENDPOINT: ${OSS_ENDPOINT:-}
       OSS_BUCKET: ${OSS_BUCKET:-}
       OSS_PREFIX: ${OSS_PREFIX:-image-crop-pipeline/}
+      ENABLE_OPEN_OUTPUT_DIR: ${ENABLE_OPEN_OUTPUT_DIR:-}
     volumes:
       - ./backend/data:/app/backend/data
       - ./models:/app/models

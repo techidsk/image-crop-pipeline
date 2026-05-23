@@ -44,6 +44,16 @@ export async function fetchBatchJobs() {
   return (await response.json()) as BatchJob[];
 }
 
+export type ServerConfig = {
+  features: { openOutputDir: boolean };
+};
+
+export async function fetchServerConfig() {
+  const response = await fetch("/api/server-config");
+  if (!response.ok) throw new Error("服务端配置加载失败");
+  return (await response.json()) as ServerConfig;
+}
+
 export type StorageCollectionStatus = {
   status: "synced" | "pending" | "unknown";
   lastSyncedAt: string | null;

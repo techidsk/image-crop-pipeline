@@ -44,6 +44,7 @@ type BatchJobsPageProps = {
   scenes: CropScene[];
   jobs: BatchJob[];
   poseProvider: PoseProviderId;
+  openOutputDirEnabled: boolean;
   onJobCreated: (job: BatchJob) => void;
   onJobUpdated: (job: BatchJob) => void;
 };
@@ -80,7 +81,7 @@ const REVIEW_META: Record<ReviewStatus, { label: string; color: string }> = {
   rejected: { label: "异常", color: "red" }
 };
 
-export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobUpdated }: BatchJobsPageProps) {
+export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled, onJobCreated, onJobUpdated }: BatchJobsPageProps) {
   const { message } = App.useApp();
   const activeScenes = scenes.filter((scene) => scene.status !== "archived");
   const [sceneId, setSceneId] = useState(activeScenes[0]?.id ?? "");
@@ -382,19 +383,22 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       title: "输出目录",
       dataIndex: "outputDir",
       key: "outputDir",
-      render: (_, job) => (
-        <Button
-          size="small"
-          type="link"
-          icon={<FolderOpenOutlined />}
-          onClick={(event) => {
-            event.stopPropagation();
-            void openOutputDir(job);
-          }}
-        >
-          {job.outputDir}
-        </Button>
-      )
+      render: (_, job) =>
+        openOutputDirEnabled ? (
+          <Button
+            size="small"
+            type="link"
+            icon={<FolderOpenOutlined />}
+            onClick={(event) => {
+              event.stopPropagation();
+              void openOutputDir(job);
+            }}
+          >
+            {job.outputDir}
+          </Button>
+        ) : (
+          <Text type="secondary" ellipsis>{job.outputDir}</Text>
+        )
     },
     {
       title: "下载",
@@ -482,7 +486,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
               prefix={<FolderOpenOutlined />}
               value={outputDir}
               onChange={(event) => setOutputDir(event.target.value)}
-              placeholder="例如 C:\\exports\\brand-a 或 outputs"
+              placeholder="默认 outputs；服务端部署时建议保持相对路径"
             />
           </Flex>
 

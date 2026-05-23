@@ -5,10 +5,12 @@ import {
   fetchBatchJobs,
   fetchPresets,
   fetchScenes,
+  fetchServerConfig,
   fetchStorageStatus,
   persistPresets,
   persistScenes,
   triggerStorageSync,
+  type ServerConfig,
   type StorageStatus
 } from "./api/presets";
 import { Sidebar } from "./components/Sidebar";
@@ -75,6 +77,7 @@ export function App() {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const view = viewForPath(location.pathname);
 
   useEffect(() => {
@@ -82,6 +85,7 @@ export function App() {
     void loadScenes();
     void loadJobs();
     void loadStorageStatus();
+    void loadServerConfig();
   }, []);
 
   const allTags = useMemo(
@@ -123,6 +127,14 @@ export function App() {
       setStorageStatus(await fetchStorageStatus());
     } catch {
       // 存储状态非关键功能，加载失败时静默忽略
+    }
+  };
+
+  const loadServerConfig = async () => {
+    try {
+      setServerConfig(await fetchServerConfig());
+    } catch {
+      // 服务端配置加载失败时按保守策略禁用本地功能
     }
   };
 
@@ -240,6 +252,7 @@ export function App() {
                   scenes={scenes}
                   jobs={jobs}
                   poseProvider={poseProvider}
+                  openOutputDirEnabled={serverConfig?.features.openOutputDir ?? false}
                   onJobCreated={(job) => setJobs((current) => [job, ...current])}
                   onJobUpdated={updateJob}
                 />
