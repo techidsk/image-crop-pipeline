@@ -77,7 +77,7 @@ export function PresetListPage({
       render: (_, preset) => (
         <div className="flex flex-col">
           <Text strong>{preset.name}</Text>
-          <Text type="secondary" style={{ fontSize: 11 }}>{preset.id}</Text>
+          <Text type="secondary">{preset.id}</Text>
         </div>
       )
     },
@@ -121,7 +121,7 @@ export function PresetListPage({
       key: "note",
       ellipsis: true,
       render: (note) => (
-        <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+        <Text type="secondary" ellipsis>
           {note || "无说明"}
         </Text>
       )
@@ -186,7 +186,7 @@ export function PresetListPage({
         title={
           <div className="flex flex-col gap-0.5">
             <Title level={5} style={{ margin: 0 }}>预设管理</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>筛选、测试和进入单个预设编辑</Text>
+            <Text type="secondary">筛选、测试和进入单个预设编辑</Text>
           </div>
         }
         extra={
@@ -197,7 +197,7 @@ export function PresetListPage({
       >
         <Space orientation="vertical" size={12} style={{ width: "100%" }}>
           <Space size={8} wrap>
-            <Text type="secondary" style={{ fontSize: 12 }}>状态</Text>
+            <Text type="secondary">状态</Text>
             <Segmented
               size="small"
               value={statusFilter}
@@ -207,7 +207,7 @@ export function PresetListPage({
           </Space>
           {allTags.length > 0 && (
             <Space size={4} wrap align="center">
-              <Text type="secondary" style={{ fontSize: 12 }}>标签</Text>
+              <Text type="secondary">标签</Text>
               {allTags.map((tag) => (
                 <Tag.CheckableTag
                   key={tag}
@@ -368,7 +368,7 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
                 const compareCrop = response.crops[0];
                 return (
                   <div key={provider} className="flex flex-col gap-1">
-                    <Text strong style={{ fontSize: 12 }}>{providerLabel(provider as PoseProviderId)}</Text>
+                    <Text strong>{providerLabel(provider as PoseProviderId)}</Text>
                     {compareCrop ? (
                       <>
                         <Image
@@ -376,7 +376,7 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
                           alt={provider}
                           style={{ objectFit: "contain", maxHeight: 220 }}
                         />
-                        <Text type="secondary" style={{ fontSize: 11 }}>
+                        <Text type="secondary">
                           {compareCrop.width}x{compareCrop.height} · L{compareCrop.box.left} T{compareCrop.box.top}
                         </Text>
                       </>
@@ -397,10 +397,10 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
               alt={crop.name}
               style={{ objectFit: "contain", maxHeight: 360 }}
             />
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary">
               原图 {result?.source.width}x{result?.source.height} · 输出 {crop.width}x{crop.height}
             </Text>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary">
               BBox L{crop.box.left} T{crop.box.top} R{crop.box.right} B{crop.box.bottom}
             </Text>
           </div>

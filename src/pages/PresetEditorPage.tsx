@@ -367,7 +367,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             <Button icon={<ArrowLeftOutlined />} onClick={onBack}>返回</Button>
             <div className="flex flex-col">
               <Title level={4} style={{ margin: 0 }}>{preset.name}</Title>
-              <Text type="secondary" style={{ fontSize: 12 }}>编辑元数据、裁切参数和训练策略</Text>
+              <Text type="secondary">编辑元数据、裁切参数和训练策略</Text>
             </div>
           </Space>
           <Tag color={currentStatus.color}>{currentStatus.label}</Tag>
@@ -378,7 +378,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
         <Card size="small" title="基础信息">
           <Space orientation="vertical" size={12} style={{ width: "100%" }}>
             <div className="flex flex-col gap-1">
-              <Text type="secondary" style={{ fontSize: 12 }}>名称</Text>
+              <Text type="secondary">名称</Text>
               <Input
                 value={preset.name}
                 onChange={(event) => onUpdate(preset.id, { name: event.target.value })}
@@ -386,7 +386,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             </div>
 
             <div className="flex flex-col gap-1">
-              <Text type="secondary" style={{ fontSize: 12 }}>标签</Text>
+              <Text type="secondary">标签</Text>
               <Select
                 mode="tags"
                 value={preset.tags}
@@ -395,13 +395,13 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                 onChange={(tags) => onUpdate(preset.id, { tags: normalizeTags(tags) })}
                 maxTagCount={8}
               />
-              <Text type="secondary" style={{ fontSize: 10 }}>
+              <Text type="secondary">
                 小写字母/数字/连字符/下划线，最多 8 个
               </Text>
             </div>
 
             <div className="flex flex-col gap-1">
-              <Text type="secondary" style={{ fontSize: 12 }}>状态说明</Text>
+              <Text type="secondary">状态说明</Text>
               <TextArea
                 rows={3}
                 value={preset.note ?? ""}
@@ -424,7 +424,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             </div>
 
             <div className="flex flex-col gap-1">
-              <Text type="secondary" style={{ fontSize: 12 }}>裁切保护</Text>
+              <Text type="secondary">裁切保护</Text>
               <Space>
                 <Checkbox
                   checked={Boolean(preset.protectHead)}
@@ -442,7 +442,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             </div>
 
             <div className="flex flex-col gap-1">
-              <Text type="secondary" style={{ fontSize: 12 }}>适用视角</Text>
+              <Text type="secondary">适用视角</Text>
               <Space>
                 {viewAngles.map((viewAngle) => (
                   <Checkbox
@@ -463,7 +463,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
           title={
             <div className="flex flex-col gap-0.5">
               <Title level={5} style={{ margin: 0 }}>训练</Title>
-              <Text type="secondary" style={{ fontSize: 12 }}>上传原图并手动画裁切框，最少 5 组</Text>
+              <Text type="secondary">上传原图并手动画裁切框，最少 5 组</Text>
             </div>
           }
           extra={
@@ -486,7 +486,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                 <Badge count={`${trainSamples.length}/5`} showZero color={trainSamples.length >= 5 ? "#1c6b62" : "#fa8c16"}>
                   <Text strong>训练样本</Text>
                 </Badge>
-                <Text type="secondary" style={{ fontSize: 12 }}>测试集 {testSamples.length} 组</Text>
+                <Text type="secondary">测试集 {testSamples.length} 组</Text>
               </Space>
               <Space wrap>
                 <Button
@@ -524,7 +524,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                 size="small"
                 type="inner"
                 title="样本列表"
-                extra={<Text type="secondary" style={{ fontSize: 11 }}>{samples.length} 张</Text>}
+                extra={<Text type="secondary">{samples.length} 张</Text>}
                 styles={{ body: { padding: 0, maxHeight: 520, overflow: "auto" } }}
               >
                 {samples.length === 0 ? (
@@ -543,11 +543,11 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                     >
                       <img src={sample.previewUrl} alt={sample.filename} className="h-10 w-10 rounded object-cover" />
                       <div className="flex min-w-0 flex-col gap-0.5">
-                        <Text strong style={{ fontSize: 11 }} ellipsis>{sample.filename}</Text>
+                        <Text strong ellipsis>{sample.filename}</Text>
                         <Space size={4}>
                           <Tag
                             color={sample.confirmed ? "green" : sample.cropPreviewUrl ? "blue" : "default"}
-                            style={{ marginInlineEnd: 0, fontSize: 10 }}
+                            style={{ marginInlineEnd: 0 }}
                           >
                             {sample.confirmed
                               ? `已确认 · ${sample.set === "train" ? "训练" : "测试"}`
@@ -555,7 +555,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                                 ? "已预览"
                                 : "待处理"}
                           </Tag>
-                          <Text type="secondary" style={{ fontSize: 10 }}>
+                          <Text type="secondary">
                             {viewAngleLabels[sample.viewAngle ?? "front"]} · {providerLabel(sample.poseProvider)}
                           </Text>
                         </Space>
@@ -643,7 +643,7 @@ function TrainingDiagnosticsPanel({ diagnostics }: { diagnostics: TrainingDiagno
   ];
 
   return (
-    <Card size="small" type="inner" title="偏差诊断" extra={<Text type="secondary" style={{ fontSize: 12 }}>阈值 {formatMetric(diagnostics.threshold)} · 过滤 {rejected} 组</Text>}>
+    <Card size="small" type="inner" title="偏差诊断" extra={<Text type="secondary">阈值 {formatMetric(diagnostics.threshold)} · 过滤 {rejected} 组</Text>}>
       <Space orientation="vertical" size={12} style={{ width: "100%" }}>
         {diagnostics.center && (
           <Alert

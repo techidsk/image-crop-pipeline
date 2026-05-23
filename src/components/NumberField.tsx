@@ -13,7 +13,7 @@ type NumberFieldProps = {
 export function NumberField({ label, value, onChange, step = 1, min }: NumberFieldProps) {
   return (
     <div className="flex flex-col gap-1">
-      <Text type="secondary" style={{ fontSize: 11 }}>{label}</Text>
+      <Text type="secondary">{label}</Text>
       <InputNumber
         size="small"
         value={value}

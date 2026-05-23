@@ -98,9 +98,9 @@ export function Sidebar({
             OP
           </div>
           <div className="flex flex-col leading-tight">
-            <Text strong style={{ fontSize: 15 }}>Crop Pipeline</Text>
-            <Text type="secondary" style={{ fontSize: 11 }}>Python 工作流 · React 控制台</Text>
-            <Text type="secondary" className="!font-mono" style={{ fontSize: 10 }}>
+            <Text strong>Crop Pipeline</Text>
+            <Text type="secondary">Python 工作流 · React 控制台</Text>
+            <Text type="secondary" className="!font-mono">
               {__APP_VERSION__} · {__APP_COMMIT__}
             </Text>
           </div>
@@ -120,7 +120,7 @@ export function Sidebar({
           )}
 
           <div className="flex flex-col gap-1">
-            <Text type="secondary" style={{ fontSize: 11 }}>姿态引擎</Text>
+            <Text type="secondary">姿态引擎</Text>
             <Select
               value={poseProvider}
               size="small"
@@ -162,7 +162,7 @@ function StorageStatusPanel({
       <div className="mb-1 flex items-center justify-between">
         <Space size={4}>
           <CloudOutlined style={{ color: "#1c6b62" }} />
-          <Text strong style={{ fontSize: 12 }}>云端同步</Text>
+          <Text strong>云端同步</Text>
         </Space>
         <Button
           size="small"
@@ -177,8 +177,8 @@ function StorageStatusPanel({
       <Space orientation="vertical" size={2} style={{ width: "100%" }}>
         {Object.entries(storageStatus.collections).map(([name, info]) => (
           <div key={name} className="flex items-center justify-between" title={info.lastError ?? ""}>
-            <Text type="secondary" style={{ fontSize: 11 }}>{COLLECTION_LABELS[name] ?? name}</Text>
-            <Tag color={STATUS_COLORS[info.status]} style={{ marginInlineEnd: 0, fontSize: 10 }}>
+            <Text type="secondary">{COLLECTION_LABELS[name] ?? name}</Text>
+            <Tag color={STATUS_COLORS[info.status]} style={{ marginInlineEnd: 0 }}>
               {STATUS_LABELS[info.status] ?? info.status}
             </Tag>
           </div>

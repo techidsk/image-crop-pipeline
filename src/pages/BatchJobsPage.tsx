@@ -344,8 +344,8 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       width: 200,
       render: (_, job) => (
         <div className="flex flex-col">
-          <Text strong style={{ fontSize: 12 }}>{job.id}</Text>
-          <Text type="secondary" style={{ fontSize: 10 }}>{job.createdAt}</Text>
+          <Text strong>{job.id}</Text>
+          <Text type="secondary">{job.createdAt}</Text>
         </div>
       )
     },
@@ -418,7 +418,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       key: "detail",
       ellipsis: true,
       render: (_, job) => (
-        <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+        <Text type="secondary" ellipsis>
           {job.images.find((image) => image.error)?.error || `${job.images.length} 张图片`}
         </Text>
       )
@@ -432,13 +432,13 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
         title={
           <div className="flex flex-col gap-0.5">
             <Title level={5} style={{ margin: 0 }}>批量任务</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>选择品牌场景，多图批量跑姿态识别和裁切输出</Text>
+            <Text type="secondary">选择品牌场景，多图批量跑姿态识别和裁切输出</Text>
           </div>
         }
       >
         <Space orientation="vertical" size={12} style={{ width: "100%" }}>
           <div className="flex flex-col gap-1">
-            <Text type="secondary" style={{ fontSize: 12 }}>场景</Text>
+            <Text type="secondary">场景</Text>
             <Select
               value={selectedScene?.id}
               onChange={(value) => setSceneId(value)}
@@ -450,7 +450,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Text type="secondary" style={{ fontSize: 12 }}>输出目录</Text>
+            <Text type="secondary">输出目录</Text>
             <Input
               prefix={<FolderOpenOutlined />}
               value={outputDir}
@@ -479,12 +479,11 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
           </Space>
 
           <div className="grid grid-cols-3 gap-2">
-            <Statistic title="原图" value={files.length} styles={{ content: { fontSize: 16 } }} />
-            <Statistic title="预设" value={selectedScene?.presetIds.length ?? 0} styles={{ content: { fontSize: 16 } }} />
+            <Statistic title="原图" value={files.length} />
+            <Statistic title="预设" value={selectedScene?.presetIds.length ?? 0} />
             <Statistic
               title="预期输出"
               value={files.length * (selectedScene?.presetIds.length ?? 0)}
-              styles={{ content: { fontSize: 16 } }}
             />
           </div>
 
@@ -493,7 +492,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
           {selectedScene && (
             <Card size="small" type="inner" title={selectedScene.brand || selectedScene.name}>
               <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary">
                   {selectedScene.description || "暂无说明"}
                 </Text>
                 {selectedScene.tags.length > 0 && (
@@ -513,7 +512,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
                   className="flex items-center justify-between border-b border-[#f0f1ed] px-3 py-2 text-xs last:border-b-0"
                 >
                   <span className="truncate">{file.name}</span>
-                  <Text type="secondary" style={{ fontSize: 10 }}>{Math.round(file.size / 1024)} KB</Text>
+                  <Text type="secondary">{Math.round(file.size / 1024)} KB</Text>
                 </div>
               ))}
             </Card>
@@ -574,7 +573,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
                   <Space orientation="vertical" size={8} style={{ width: "100%" }}>
                     <div className="flex items-center justify-between">
                       <Text strong>{active.filename}</Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>{active.crops.length} 张输出</Text>
+                      <Text type="secondary">{active.crops.length} 张输出</Text>
                     </div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {active.crops.map((crop) => (
@@ -602,7 +601,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
         <Card
           size="small"
           title="任务记录"
-          extra={<Text type="secondary" style={{ fontSize: 12 }}>{jobs.length} 条</Text>}
+          extra={<Text type="secondary">{jobs.length} 条</Text>}
         >
           <Table
             rowKey="id"
@@ -626,11 +625,11 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
 function ProgressPanel({ progress }: { progress: RunProgress }) {
   const percent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
   return (
-    <Card size="small" type="inner" title={progress.jobId || "任务准备中"} extra={<Text type="secondary" style={{ fontSize: 12 }}>{progress.completed}/{progress.total}</Text>}>
+    <Card size="small" type="inner" title={progress.jobId || "任务准备中"} extra={<Text type="secondary">{progress.completed}/{progress.total}</Text>}>
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
         <Progress percent={percent} size="small" status={percent === 100 ? "success" : "active"} />
         <div className="flex items-center justify-between">
-          <Text type="secondary" style={{ fontSize: 11 }}>{progress.activeFilename || "等待开始"}</Text>
+          <Text type="secondary">{progress.activeFilename || "等待开始"}</Text>
           <Tag color="cyan">{progress.presetCount} 个预设</Tag>
         </div>
         <div className="flex flex-col gap-1">
@@ -640,7 +639,7 @@ function ProgressPanel({ progress }: { progress: RunProgress }) {
               className={`flex items-center gap-1.5 text-xs ${event.error ? "text-[#cf1322]" : "text-[#3a4654]"}`}
             >
               {event.error ? <WarningOutlined /> : <CheckCircleOutlined />}
-              <Text style={{ fontSize: 11 }} ellipsis>
+              <Text ellipsis>
                 {event.filename} · {event.error || `${event.outputs} 张输出`}
               </Text>
             </div>
@@ -678,15 +677,15 @@ function JobImageList({
               onClick={() => onSelect(image.filename)}
               className="flex w-full flex-col items-start gap-0.5 text-left text-xs"
             >
-              <Text strong style={{ fontSize: 12, maxWidth: 220 }} ellipsis>
+              <Text strong style={{ maxWidth: 220 }} ellipsis>
                 {image.filename}
               </Text>
-              <Text type="secondary" style={{ fontSize: 11 }}>
+              <Text type="secondary">
                 {image.error || `${image.outputs} 张输出`}
               </Text>
             </button>
             <div className="flex items-center justify-between">
-              <Tag color={REVIEW_META[reviewStatus].color} style={{ marginInlineEnd: 0, fontSize: 10 }}>
+              <Tag color={REVIEW_META[reviewStatus].color} style={{ marginInlineEnd: 0 }}>
                 {REVIEW_META[reviewStatus].label}
               </Tag>
               <Button

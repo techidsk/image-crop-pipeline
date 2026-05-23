@@ -103,7 +103,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
         title={
           <div className="flex flex-col gap-0.5">
             <Title level={5} style={{ margin: 0 }}>批量处理</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>按标签筛选预设，再批量生成输出</Text>
+            <Text type="secondary">按标签筛选预设，再批量生成输出</Text>
           </div>
         }
       >
@@ -135,18 +135,17 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
           </Space>
 
           <div className="grid grid-cols-3 gap-2">
-            <Statistic title="原图" value={files.length} styles={{ content: { fontSize: 16 } }} />
-            <Statistic title="预设" value={presets.length} styles={{ content: { fontSize: 16 } }} />
+            <Statistic title="原图" value={files.length} />
+            <Statistic title="预设" value={presets.length} />
             <Statistic
               title="预期输出"
               value={files.length * presets.length}
-              styles={{ content: { fontSize: 16 } }}
             />
           </div>
 
           {allTags.length > 0 && (
             <div className="flex flex-col gap-1">
-              <Text type="secondary" style={{ fontSize: 12 }}>标签筛选</Text>
+              <Text type="secondary">标签筛选</Text>
               <Space size={4} wrap>
                 {allTags.map((tag) => (
                   <Tag.CheckableTag
@@ -173,7 +172,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
                   onClick={() => setActiveResult(index)}
                 >
                   <span className="truncate">{file.name}</span>
-                  <Text type="secondary" style={{ fontSize: 10 }}>{Math.round(file.size / 1024)} KB</Text>
+                  <Text type="secondary">{Math.round(file.size / 1024)} KB</Text>
                 </button>
               ))}
             </Card>
@@ -195,7 +194,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
           <Card
             size="small"
             title={`${results.length} 张图片完成 · ${totalOutputs} 张输出`}
-            extra={<Text type="secondary" style={{ fontSize: 12 }}>当前：{active?.filename ?? "未选择"}</Text>}
+            extra={<Text type="secondary">当前：{active?.filename ?? "未选择"}</Text>}
           >
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
               {results.flatMap((result) =>

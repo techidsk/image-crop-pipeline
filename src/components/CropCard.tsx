@@ -24,12 +24,12 @@ export function CropCard({ filename, crop }: CropCardProps) {
       ]}
     >
       <div className="flex flex-col gap-0.5">
-        <Text strong style={{ fontSize: 12 }}>{crop.name}</Text>
-        <Text type="secondary" style={{ fontSize: 11 }}>
+        <Text strong>{crop.name}</Text>
+        <Text type="secondary">
           {safeName} · {crop.width}x{crop.height} · L{crop.box.left} T{crop.box.top}
         </Text>
         {crop.outputPath && (
-          <Text type="secondary" style={{ fontSize: 10 }} ellipsis>{crop.outputPath}</Text>
+          <Text type="secondary" ellipsis>{crop.outputPath}</Text>
         )}
       </div>
     </Card>

@@ -98,7 +98,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
         title={
           <div className="flex flex-col gap-0.5">
             <Title level={5} style={{ margin: 0 }}>视角测试</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>上传图片并识别正面、侧面、背面</Text>
+            <Text type="secondary">上传图片并识别正面、侧面、背面</Text>
           </div>
         }
       >
@@ -127,10 +127,10 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
           </Space>
 
           <div className="grid grid-cols-3 gap-2">
-            <Statistic title="图片" value={previews.length} styles={{ content: { fontSize: 16 } }} />
-            <Statistic title="已识别" value={results.length} styles={{ content: { fontSize: 16 } }} />
+            <Statistic title="图片" value={previews.length} />
+            <Statistic title="已识别" value={results.length} />
             <div className="flex flex-col">
-              <Text type="secondary" style={{ fontSize: 12 }}>引擎</Text>
+              <Text type="secondary">引擎</Text>
               <Text strong>{providerLabel(poseProvider)}</Text>
             </div>
           </div>
@@ -155,7 +155,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
                         {viewAngleLabels[viewAngle]}
                       </Tag>
                     ) : (
-                      <Text type="secondary" style={{ fontSize: 10 }}>
+                      <Text type="secondary">
                         {Math.round(preview.file.size / 1024)} KB
                       </Text>
                     )}
@@ -179,29 +179,26 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
           <Card size="small">
             <Space orientation="vertical" size={12} style={{ width: "100%" }}>
               <Space size={8} wrap>
-                <Tag color={VIEW_COLORS[activeViewAngle]} style={{ fontSize: 14, padding: "2px 10px" }}>
+                <Tag color={VIEW_COLORS[activeViewAngle]} style={{ padding: "2px 10px" }}>
                   {viewAngleLabels[activeViewAngle]}
                 </Tag>
                 <Title level={5} style={{ margin: 0 }}>{activeResult.filename ?? activePreview?.file.name}</Title>
               </Space>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary">
                 原图 {activeResult.source.width}x{activeResult.source.height} · {activeResult.keypoints.length} 个节点
               </Text>
               <div className="grid grid-cols-3 gap-3">
                 <Statistic
                   title="脸部点"
                   value={countVisible(activeResult, ["nose", "left_eye", "right_eye", "left_ear", "right_ear"])}
-                  styles={{ content: { fontSize: 18 } }}
                 />
                 <Statistic
                   title="左侧身体点"
                   value={countVisible(activeResult, ["left_shoulder", "left_elbow", "left_wrist", "left_hip", "left_knee", "left_ankle"])}
-                  styles={{ content: { fontSize: 18 } }}
                 />
                 <Statistic
                   title="右侧身体点"
                   value={countVisible(activeResult, ["right_shoulder", "right_elbow", "right_wrist", "right_hip", "right_knee", "right_ankle"])}
-                  styles={{ content: { fontSize: 18 } }}
                 />
               </div>
             </Space>
@@ -219,7 +216,7 @@ function PosePreview({ previewUrl, result }: { previewUrl: string; result?: Pose
       <img src={previewUrl} alt={result?.filename ?? "View test preview"} className="max-h-[520px] max-w-full" />
       {result && viewAngle && (
         <div className="absolute left-3 top-3">
-          <Tag color={VIEW_COLORS[viewAngle]} style={{ fontSize: 13, padding: "2px 10px" }}>
+          <Tag color={VIEW_COLORS[viewAngle]} style={{ padding: "2px 10px" }}>
             识别结论：{viewAngleLabels[viewAngle]}
           </Tag>
         </div>

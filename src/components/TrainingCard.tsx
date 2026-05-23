@@ -241,14 +241,14 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
         </div>
         <Space orientation="vertical" size={10} style={{ width: "100%" }}>
           <div>
-            <Text strong style={{ fontSize: 13 }}>{sample.filename}</Text>
+            <Text strong>{sample.filename}</Text>
             <div>
-              <Text type="secondary" style={{ fontSize: 11 }}>
+              <Text type="secondary">
                 {sample.source.width}x{sample.source.height} · 置信 {sample.confidence.toFixed(2)}
               </Text>
             </div>
             <div>
-              <Text type="secondary" style={{ fontSize: 11 }}>
+              <Text type="secondary">
                 裁切 {Math.round(sample.crop.width)}x{Math.round(sample.crop.height)} · 比 {aspectRatio.toFixed(3)}
               </Text>
             </div>
@@ -265,7 +265,7 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
             {showPose ? "隐藏 OpenPose" : "显示 OpenPose"}
           </Button>
           <div className="flex flex-col gap-1">
-            <Text type="secondary" style={{ fontSize: 11 }}>样本用途</Text>
+            <Text type="secondary">样本用途</Text>
             <Segmented
               size="small"
               block

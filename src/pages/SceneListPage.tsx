@@ -167,7 +167,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
       render: (_, scene) => (
         <div className="flex flex-col">
           <Text strong>{scene.name}</Text>
-          <Text type="secondary" style={{ fontSize: 11 }}>{scene.tags.join(", ") || "无标签"}</Text>
+          <Text type="secondary">{scene.tags.join(", ") || "无标签"}</Text>
         </div>
       )
     },
@@ -199,7 +199,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
         title={
           <div className="flex flex-col gap-0.5">
             <Title level={5} style={{ margin: 0 }}>场景管理</Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>为品牌编排一组裁切预设，并用标签支持运营检索</Text>
+            <Text type="secondary">为品牌编排一组裁切预设，并用标签支持运营检索</Text>
           </div>
         }
         extra={
@@ -239,7 +239,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
         <Card
           size="small"
           title="场景列表"
-          extra={<Text type="secondary" style={{ fontSize: 12 }}>{visibleScenes.length} / {scenes.length}</Text>}
+          extra={<Text type="secondary">{visibleScenes.length} / {scenes.length}</Text>}
         >
           <Table
             rowKey="id"
@@ -262,7 +262,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
             size="small"
             title={
               <div className="flex flex-col gap-0.5">
-                <Text type="secondary" style={{ fontSize: 11 }}>当前编辑</Text>
+                <Text type="secondary">当前编辑</Text>
                 <Title level={5} style={{ margin: 0 }}>{selectedScene.name}</Title>
               </div>
             }
@@ -288,21 +288,21 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
             <Space orientation="vertical" size={16} style={{ width: "100%" }}>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <Text type="secondary" style={{ fontSize: 12 }}>场景名称</Text>
+                  <Text type="secondary">场景名称</Text>
                   <Input
                     value={selectedScene.name}
                     onChange={(event) => updateScene(selectedScene.id, { name: event.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Text type="secondary" style={{ fontSize: 12 }}>品牌</Text>
+                  <Text type="secondary">品牌</Text>
                   <Input
                     value={selectedScene.brand}
                     onChange={(event) => updateScene(selectedScene.id, { brand: event.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Text type="secondary" style={{ fontSize: 12 }}>标签</Text>
+                  <Text type="secondary">标签</Text>
                   <Select
                     mode="tags"
                     value={selectedScene.tags}
@@ -311,7 +311,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Text type="secondary" style={{ fontSize: 12 }}>状态</Text>
+                  <Text type="secondary">状态</Text>
                   <Segmented
                     value={selectedScene.status}
                     options={STATUS_OPTIONS}
@@ -320,7 +320,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                 </div>
               </div>
               <div className="flex flex-col gap-1">
-                <Text type="secondary" style={{ fontSize: 12 }}>说明</Text>
+                <Text type="secondary">说明</Text>
                 <TextArea
                   rows={3}
                   value={selectedScene.description}
@@ -333,7 +333,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                 type="inner"
                 title="绑定预设"
                 extra={
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary">
                     {selectedScene.presetIds.length} 已绑定 · {visiblePresets.length} / {presets.length} 可见
                   </Text>
                 }
@@ -347,7 +347,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                   />
                   {presetTags.length > 0 && (
                     <div className="flex flex-col gap-1">
-                      <Text type="secondary" style={{ fontSize: 11 }}>预设标签</Text>
+                      <Text type="secondary">预设标签</Text>
                       <Space size={4} wrap>
                         {presetTags.map((tag) => (
                           <Tag.CheckableTag
@@ -369,7 +369,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                   )}
                   {presetTags.length > 0 && (
                     <div className="flex flex-col gap-1">
-                      <Text type="secondary" style={{ fontSize: 11 }}>按标签批量绑定</Text>
+                      <Text type="secondary">按标签批量绑定</Text>
                       <Space size={4} wrap>
                         {presetTags.map((tag) => {
                           const taggedPresets = presets.filter((preset) => (preset.tags ?? []).includes(tag));
@@ -410,8 +410,8 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                               : "border-[#e6ebe6] bg-white hover:border-[#1c6b62]"
                           }`}
                         >
-                          <Text strong style={{ fontSize: 12 }}>{preset.name}</Text>
-                          <Text type="secondary" style={{ fontSize: 10 }}>
+                          <Text strong>{preset.name}</Text>
+                          <Text type="secondary">
                             {preset.width}x{preset.height} · {(preset.tags ?? []).join(", ") || "无标签"}
                           </Text>
                         </button>
