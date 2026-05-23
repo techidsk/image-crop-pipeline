@@ -1,7 +1,11 @@
 import { useMemo, useRef, useState } from "react";
-import { ImageUp, Play, RotateCcw } from "lucide-react";
+import { InboxOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
+import { App, Button, Card, Empty, Space, Statistic, Tag, Typography, Upload } from "antd";
+import type { UploadFile } from "antd/es/upload/interface";
 import { viewAngleLabels } from "../constants";
 import type { PoseAnalysis, PoseKeypoint, PoseProviderId, ViewAngle } from "../types";
+
+const { Title, Text } = Typography;
 
 type ViewTestPageProps = {
   poseProvider: PoseProviderId;
@@ -12,50 +16,50 @@ type PreviewImage = {
   url: string;
 };
 
-const viewTone: Record<ViewAngle, string> = {
-  front: "front",
-  side: "side",
-  back: "back"
+const VIEW_COLORS: Record<ViewAngle, string> = {
+  front: "geekblue",
+  side: "purple",
+  back: "magenta"
 };
 
 export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
+  const { message } = App.useApp();
   const [previews, setPreviews] = useState<PreviewImage[]>([]);
   const [results, setResults] = useState<PoseAnalysis[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const previewsRef = useRef<PreviewImage[]>([]);
 
   const activePreview = previews[activeIndex];
   const activeResult = results[activeIndex];
   const activeViewAngle = activeResult ? resolvedViewAngle(activeResult) : null;
 
-  const selectedLabel = useMemo(() => {
-    if (previews.length === 0) return "选择正面、侧面或背面图片";
-    if (previews.length === 1) return previews[0].file.name;
-    return `${previews.length} 张图片待识别`;
-  }, [previews]);
+  const fileList = useMemo<UploadFile[]>(
+    () =>
+      previews.map((preview, index) => ({
+        uid: `${preview.file.name}-${preview.file.lastModified}-${index}`,
+        name: preview.file.name,
+        size: preview.file.size,
+        status: "done" as const
+      })),
+    [previews]
+  );
 
-  const chooseFiles = (selected: FileList | null) => {
-    setError("");
+  const replacePreviews = (nextFiles: File[]) => {
+    previewsRef.current.forEach((preview) => URL.revokeObjectURL(preview.url));
+    const next = nextFiles.map((file) => ({ file, url: URL.createObjectURL(file) }));
+    previewsRef.current = next;
+    setPreviews(next);
     setResults([]);
-    previews.forEach((preview) => URL.revokeObjectURL(preview.url));
-    const nextPreviews = Array.from(selected ?? []).map((file) => ({
-      file,
-      url: URL.createObjectURL(file)
-    }));
-    setPreviews(nextPreviews);
     setActiveIndex(0);
   };
 
   const analyzeViews = async () => {
     if (previews.length === 0) {
-      setError("请先选择图片。");
+      void message.warning("请先选择图片");
       return;
     }
-
     setIsAnalyzing(true);
-    setError("");
     try {
       const formData = new FormData();
       previews.forEach((preview) => formData.append("images", preview.file));
@@ -69,114 +73,164 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
       setResults(body.images.map(normalizePoseAnalysis));
       setActiveIndex(0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "视角识别失败");
+      void message.error(err instanceof Error ? err.message : "视角识别失败");
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  return (
-    <section className="work-page view-test-page">
-      <div className="control-panel">
-        <div className="section-header">
-          <div>
-            <h2>视角测试</h2>
-            <p>上传图片并识别正面、侧面、背面</p>
-          </div>
-        </div>
-        <button className="upload-zone" type="button" onClick={() => inputRef.current?.click()}>
-          <ImageUp size={22} />
-          <span>{selectedLabel}</span>
-        </button>
-        <input
-          ref={inputRef}
-          hidden
-          multiple
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          onChange={(event) => chooseFiles(event.target.files)}
-        />
-        <div className="toolbar">
-          <button type="button" onClick={analyzeViews} disabled={isAnalyzing}>
-            <Play size={17} />
-            <span>{isAnalyzing ? "识别中" : "开始识别视角"}</span>
-          </button>
-          <button type="button" className="ghost" onClick={() => chooseFiles(null)}>
-            <RotateCcw size={17} />
-          </button>
-        </div>
-        <div className="summary-strip">
-          <span>{previews.length} 张图片</span>
-          <span>{results.length} 张已识别</span>
-          <span>{providerLabel(poseProvider)}</span>
-        </div>
-        {error && <p className="error">{error}</p>}
-        <div className="file-list">
-          {previews.map((preview, index) => (
-            <button
-              key={`${preview.file.name}-${preview.file.lastModified}`}
-              type="button"
-              className={activeIndex === index ? "active" : ""}
-              onClick={() => setActiveIndex(index)}
-            >
-              <span>{preview.file.name}</span>
-              <small className={results[index] ? `view-result-${resolvedViewAngle(results[index])}` : ""}>
-                {results[index] ? `结论：${viewAngleLabels[resolvedViewAngle(results[index])]}` : `${Math.round(preview.file.size / 1024)} KB`}
-              </small>
-            </button>
-          ))}
-        </div>
-      </div>
+  const uploadProps = {
+    multiple: true,
+    accept: "image/png,image/jpeg,image/webp",
+    showUploadList: false,
+    fileList,
+    beforeUpload: (_file: File, allFiles: File[]) => {
+      replacePreviews(allFiles);
+      return false;
+    },
+    onRemove: () => replacePreviews([])
+  };
 
-      <div className="main-stage view-test-stage">
-        <div className="image-stage pose-preview-stage">
+  return (
+    <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <Card
+        size="small"
+        title={
+          <div className="flex flex-col gap-0.5">
+            <Title level={5} style={{ margin: 0 }}>视角测试</Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>上传图片并识别正面、侧面、背面</Text>
+          </div>
+        }
+      >
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+          <Upload.Dragger {...uploadProps}>
+            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p className="ant-upload-text">
+              {previews.length === 0
+                ? "选择正面、侧面或背面图片"
+                : previews.length === 1
+                  ? previews[0].file.name
+                  : `${previews.length} 张图片待识别`}
+            </p>
+          </Upload.Dragger>
+
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              loading={isAnalyzing}
+              onClick={analyzeViews}
+            >
+              {isAnalyzing ? "识别中" : "开始识别视角"}
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => replacePreviews([])}>清空</Button>
+          </Space>
+
+          <div className="grid grid-cols-3 gap-2">
+            <Statistic title="图片" value={previews.length} styles={{ content: { fontSize: 16 } }} />
+            <Statistic title="已识别" value={results.length} styles={{ content: { fontSize: 16 } }} />
+            <div className="flex flex-col">
+              <Text type="secondary" style={{ fontSize: 12 }}>引擎</Text>
+              <Text strong>{providerLabel(poseProvider)}</Text>
+            </div>
+          </div>
+
+          {previews.length > 0 && (
+            <Card size="small" type="inner" title="文件列表" styles={{ body: { padding: 0, maxHeight: 240, overflow: "auto" } }}>
+              {previews.map((preview, index) => {
+                const result = results[index];
+                const viewAngle = result ? resolvedViewAngle(result) : null;
+                return (
+                  <button
+                    key={`${preview.file.name}-${preview.file.lastModified}`}
+                    type="button"
+                    className={`flex w-full items-center justify-between border-b border-[#f0f1ed] px-3 py-2 text-left text-xs last:border-b-0 ${
+                      activeIndex === index ? "bg-[#e3efed]" : "hover:bg-[#f7f8f5]"
+                    }`}
+                    onClick={() => setActiveIndex(index)}
+                  >
+                    <span className="truncate">{preview.file.name}</span>
+                    {viewAngle ? (
+                      <Tag color={VIEW_COLORS[viewAngle]} style={{ marginInlineEnd: 0 }}>
+                        {viewAngleLabels[viewAngle]}
+                      </Tag>
+                    ) : (
+                      <Text type="secondary" style={{ fontSize: 10 }}>
+                        {Math.round(preview.file.size / 1024)} KB
+                      </Text>
+                    )}
+                  </button>
+                );
+              })}
+            </Card>
+          )}
+        </Space>
+      </Card>
+
+      <div className="flex flex-col gap-3">
+        <Card size="small" styles={{ body: { minHeight: 420, padding: 12 } }}>
           {activePreview ? (
             <PosePreview previewUrl={activePreview.url} result={activeResult} />
           ) : (
-            <div className="empty-state">选择图片后开始测试视角识别</div>
+            <Empty description="选择图片后开始测试视角识别" />
           )}
-        </div>
+        </Card>
         {activeResult && activeViewAngle && (
-          <div className="result-panel view-test-result">
-            <div>
-              <span className={`view-angle-pill ${viewTone[activeViewAngle]}`}>
-                {viewAngleLabels[activeViewAngle]}
-              </span>
-              <h2>{activeResult.filename ?? activePreview?.file.name}</h2>
-              <p>
+          <Card size="small">
+            <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+              <Space size={8} wrap>
+                <Tag color={VIEW_COLORS[activeViewAngle]} style={{ fontSize: 14, padding: "2px 10px" }}>
+                  {viewAngleLabels[activeViewAngle]}
+                </Tag>
+                <Title level={5} style={{ margin: 0 }}>{activeResult.filename ?? activePreview?.file.name}</Title>
+              </Space>
+              <Text type="secondary" style={{ fontSize: 12 }}>
                 原图 {activeResult.source.width}x{activeResult.source.height} · {activeResult.keypoints.length} 个节点
-              </p>
-            </div>
-            <div className="view-metrics">
-              <Metric label="脸部点" value={countVisible(activeResult, ["nose", "left_eye", "right_eye", "left_ear", "right_ear"])} />
-              <Metric label="左侧身体点" value={countVisible(activeResult, ["left_shoulder", "left_elbow", "left_wrist", "left_hip", "left_knee", "left_ankle"])} />
-              <Metric label="右侧身体点" value={countVisible(activeResult, ["right_shoulder", "right_elbow", "right_wrist", "right_hip", "right_knee", "right_ankle"])} />
-            </div>
-          </div>
+              </Text>
+              <div className="grid grid-cols-3 gap-3">
+                <Statistic
+                  title="脸部点"
+                  value={countVisible(activeResult, ["nose", "left_eye", "right_eye", "left_ear", "right_ear"])}
+                  styles={{ content: { fontSize: 18 } }}
+                />
+                <Statistic
+                  title="左侧身体点"
+                  value={countVisible(activeResult, ["left_shoulder", "left_elbow", "left_wrist", "left_hip", "left_knee", "left_ankle"])}
+                  styles={{ content: { fontSize: 18 } }}
+                />
+                <Statistic
+                  title="右侧身体点"
+                  value={countVisible(activeResult, ["right_shoulder", "right_elbow", "right_wrist", "right_hip", "right_knee", "right_ankle"])}
+                  styles={{ content: { fontSize: 18 } }}
+                />
+              </div>
+            </Space>
+          </Card>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 
 function PosePreview({ previewUrl, result }: { previewUrl: string; result?: PoseAnalysis }) {
   const viewAngle = result ? resolvedViewAngle(result) : null;
   return (
-    <div className="pose-preview-wrap">
-      <img src={previewUrl} alt={result?.filename ?? "View test preview"} />
+    <div className="relative inline-block max-w-full">
+      <img src={previewUrl} alt={result?.filename ?? "View test preview"} className="max-h-[520px] max-w-full" />
       {result && viewAngle && (
-        <div className={`pose-conclusion ${viewTone[viewAngle]}`}>
-          <strong>识别结论</strong>
-          <span>{viewAngleLabels[viewAngle]}</span>
+        <div className="absolute left-3 top-3">
+          <Tag color={VIEW_COLORS[viewAngle]} style={{ fontSize: 13, padding: "2px 10px" }}>
+            识别结论：{viewAngleLabels[viewAngle]}
+          </Tag>
         </div>
       )}
       {result?.keypoints.map((point) => {
         if (point.confidence < 0.15) return null;
         return (
           <span
-            className="pose-point"
             key={point.name}
             title={`${point.name} ${point.confidence.toFixed(2)}`}
+            className="pointer-events-none absolute h-2 w-2 -translate-x-1 -translate-y-1 rounded-full border border-white bg-[#1c6b62]"
             style={{
               left: `${(point.x / result.source.width) * 100}%`,
               top: `${(point.y / result.source.height) * 100}%`
@@ -184,15 +238,6 @@ function PosePreview({ previewUrl, result }: { previewUrl: string; result?: Pose
           />
         );
       })}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="view-metric">
-      <strong>{value}</strong>
-      <span>{label}</span>
     </div>
   );
 }

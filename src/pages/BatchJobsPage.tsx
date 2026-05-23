@@ -1,7 +1,43 @@
-import { AlertTriangle, CheckCircle2, Download, FolderInput, ImageUp, Play, RotateCcw, XCircle } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  DownloadOutlined,
+  FolderOpenOutlined,
+  InboxOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
+  WarningOutlined
+} from "@ant-design/icons";
+import {
+  App,
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Input,
+  Progress,
+  Select,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+  Upload
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
+import type { UploadFile } from "antd/es/upload/interface";
 import { CropCard } from "../components/CropCard";
-import type { BatchJob, CropScene, PoseProviderId, ProcessResponse, ReviewStatus } from "../types";
+import type {
+  BatchJob,
+  BatchJobImage,
+  CropScene,
+  PoseProviderId,
+  ProcessResponse,
+  ReviewStatus
+} from "../types";
+
+const { Title, Text } = Typography;
 
 type BatchJobsPageProps = {
   scenes: CropScene[];
@@ -14,7 +50,16 @@ type BatchJobsPageProps = {
 type StreamEvent =
   | { type: "start"; jobId: string; total: number; presetCount: number; outputDir: string }
   | { type: "active"; jobId: string; completed: number; total: number; filename: string }
-  | { type: "progress"; jobId: string; completed: number; total: number; filename: string; outputs: number; error?: string; result?: ProcessResponse }
+  | {
+      type: "progress";
+      jobId: string;
+      completed: number;
+      total: number;
+      filename: string;
+      outputs: number;
+      error?: string;
+      result?: ProcessResponse;
+    }
   | { type: "final"; job: BatchJob; images: ProcessResponse[] }
   | { type: "error"; message: string; job?: BatchJob };
 
@@ -28,7 +73,14 @@ type RunProgress = {
   events: Array<{ filename: string; outputs: number; error?: string }>;
 };
 
+const REVIEW_META: Record<ReviewStatus, { label: string; color: string }> = {
+  pending_review: { label: "待复核", color: "gold" },
+  approved: { label: "已通过", color: "green" },
+  rejected: { label: "异常", color: "red" }
+};
+
 export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobUpdated }: BatchJobsPageProps) {
+  const { message } = App.useApp();
   const activeScenes = scenes.filter((scene) => scene.status !== "archived");
   const [sceneId, setSceneId] = useState(activeScenes[0]?.id ?? "");
   const [outputDir, setOutputDir] = useState("outputs");
@@ -38,8 +90,6 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
   const [activeResult, setActiveResult] = useState(0);
   const [progress, setProgress] = useState<RunProgress | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const selectedScene = activeScenes.find((scene) => scene.id === sceneId) ?? activeScenes[0];
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? jobs[0];
@@ -55,25 +105,30 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
     if (!selectedJobId && jobs[0]) setSelectedJobId(jobs[0].id);
   }, [jobs, selectedJobId]);
 
-  const selectedLabel = useMemo(() => {
-    if (files.length === 0) return "上传多张原图";
-    return `${files.length} 张原图待处理`;
-  }, [files.length]);
+  const fileList = useMemo<UploadFile[]>(
+    () =>
+      files.map((file, index) => ({
+        uid: `${file.name}-${file.lastModified}-${index}`,
+        name: file.name,
+        size: file.size,
+        status: "done" as const
+      })),
+    [files]
+  );
 
-  const chooseFiles = (selected: FileList | null) => {
-    setFiles(Array.from(selected ?? []));
+  const replaceFiles = (next: File[]) => {
+    setFiles(next);
     setActiveResult(0);
     setProgress(null);
-    setError("");
   };
 
   const runJob = async () => {
     if (!selectedScene) {
-      setError("请先创建或选择一个场景。");
+      void message.warning("请先创建或选择一个场景");
       return;
     }
     if (files.length === 0) {
-      setError("请先上传图片。");
+      void message.warning("请先上传图片");
       return;
     }
     await runStream("/api/batch-jobs/run-stream", files, {
@@ -86,11 +141,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
   const rerunSelectedJob = async () => {
     if (!selectedJob) return;
     if (rerunnableFiles.length === 0) {
-      setError("当前页面没有可用于重跑的失败或异常原图。跨会话重跑需要后续补原图归档。");
+      void message.warning("当前页面没有可用于重跑的失败或异常原图，跨会话重跑需要后续补原图归档");
       return;
     }
     setIsRunning(true);
-    setError("");
     try {
       const formData = new FormData();
       rerunnableFiles.forEach((file) => formData.append("images", file));
@@ -109,10 +163,12 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       onJobCreated(body.job);
       if (body.job.status !== "completed") {
         const failed = body.job.images.find((image) => image.error);
-        setError(failed?.error ?? "重跑任务失败，请查看任务记录。");
+        void message.error(failed?.error ?? "重跑任务失败，请查看任务记录");
+      } else {
+        void message.success("重跑完成");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "重跑任务失败");
+      void message.error(err instanceof Error ? err.message : "重跑任务失败");
     } finally {
       setIsRunning(false);
     }
@@ -120,7 +176,6 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
 
   const runStream = async (url: string, uploadFiles: File[], fields: Record<string, string>) => {
     setIsRunning(true);
-    setError("");
     setProgress(null);
     try {
       const formData = new FormData();
@@ -133,7 +188,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       }
       await readStream(response.body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "任务执行失败");
+      void message.error(err instanceof Error ? err.message : "任务执行失败");
     } finally {
       setIsRunning(false);
     }
@@ -182,7 +237,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
               ...current,
               completed: event.completed,
               activeFilename: event.filename,
-              events: [...current.events, { filename: event.filename, outputs: event.outputs, error: event.error }]
+              events: [
+                ...current.events,
+                { filename: event.filename, outputs: event.outputs, error: event.error }
+              ]
             }
           : current
       );
@@ -201,18 +259,19 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       onJobCreated(event.job);
       if (event.job.status !== "completed") {
         const failed = event.job.images.find((image) => image.error);
-        setError(failed?.error ?? "任务执行失败，请查看任务记录。");
+        void message.error(failed?.error ?? "任务执行失败");
+      } else {
+        void message.success(`任务完成，共 ${event.images.length} 张图片`);
       }
       return;
     }
     if (event.type === "error") {
       if (event.job) onJobCreated(event.job);
-      setError(event.message);
+      void message.error(event.message);
     }
   };
 
   const updateJobReview = async (job: BatchJob, reviewStatus: ReviewStatus) => {
-    setError("");
     try {
       const response = await fetch(`/api/batch-jobs/${encodeURIComponent(job.id)}/review`, {
         method: "PATCH",
@@ -225,12 +284,11 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       }
       onJobUpdated((await response.json()) as BatchJob);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "复核状态更新失败");
+      void message.error(err instanceof Error ? err.message : "复核状态更新失败");
     }
   };
 
   const updateImageReview = async (job: BatchJob, filename: string, reviewStatus: ReviewStatus) => {
-    setError("");
     try {
       const response = await fetch(
         `/api/batch-jobs/${encodeURIComponent(job.id)}/images/${encodeURIComponent(filename)}/review`,
@@ -246,12 +304,11 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       }
       onJobUpdated((await response.json()) as BatchJob);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "单图复核状态更新失败");
+      void message.error(err instanceof Error ? err.message : "单图复核状态更新失败");
     }
   };
 
   const openOutputDir = async (job: BatchJob) => {
-    setError("");
     try {
       const response = await fetch(`/api/batch-jobs/${job.id}/open-output`, { method: "POST" });
       if (!response.ok) {
@@ -259,7 +316,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
         throw new Error(body.detail ?? "输出目录打开失败");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "输出目录打开失败");
+      void message.error(err instanceof Error ? err.message : "输出目录打开失败");
     }
   };
 
@@ -267,221 +324,330 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
     window.location.href = `/api/batch-jobs/${job.id}/download`;
   };
 
-  return (
-    <section className="work-page batch-job-page">
-      <div className="control-panel job-control-panel">
-        <div className="section-header">
-          <div>
-            <h2>批量任务</h2>
-            <p>选择品牌场景，多图批量跑姿态识别和裁切输出</p>
-          </div>
-        </div>
-        <label>
-          场景
-          <select value={selectedScene?.id ?? ""} onChange={(event) => setSceneId(event.target.value)}>
-            {activeScenes.map((scene) => (
-              <option key={scene.id} value={scene.id}>
-                {scene.name} · {scene.brand || "未设置品牌"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          输出目录
-          <span className="input-with-icon">
-            <FolderInput size={16} />
-            <input value={outputDir} onChange={(event) => setOutputDir(event.target.value)} placeholder="例如 C:\\exports\\brand-a 或 outputs" />
-          </span>
-        </label>
-        <button className="upload-zone" type="button" onClick={() => inputRef.current?.click()}>
-          <ImageUp size={22} />
-          <span>{selectedLabel}</span>
-        </button>
-        <input
-          ref={inputRef}
-          hidden
-          multiple
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          onChange={(event) => chooseFiles(event.target.files)}
-        />
-        <div className="toolbar">
-          <button type="button" onClick={runJob} disabled={isRunning}>
-            <Play size={17} />
-            <span>{isRunning ? "任务执行中" : "开始批量任务"}</span>
-          </button>
-          <button type="button" className="ghost" onClick={() => chooseFiles(null)}>
-            <RotateCcw size={17} />
-          </button>
-        </div>
-        <div className="summary-strip job-summary-strip">
-          <span>{files.length} 张原图</span>
-          <span>{selectedScene?.presetIds.length ?? 0} 个预设</span>
-          <span>{files.length * (selectedScene?.presetIds.length ?? 0)} 张输出</span>
-        </div>
-        {progress && <ProgressPanel progress={progress} />}
-        {selectedScene && (
-          <div className="scene-mini-card">
-            <strong>{selectedScene.brand || selectedScene.name}</strong>
-            <span>{selectedScene.description || "暂无说明"}</span>
-            <div className="row-tags compact">
-              {selectedScene.tags.map((tag) => <span key={tag}>{tag}</span>)}
-            </div>
-          </div>
-        )}
-        {error && <p className="error">{error}</p>}
-        <div className="file-list">
-          {files.map((file, index) => (
-            <button key={`${file.name}-${file.lastModified}`} type="button">
-              <span>{file.name}</span>
-              <small>{Math.round(file.size / 1024)} KB</small>
-            </button>
-          ))}
-        </div>
-      </div>
+  const uploadProps = {
+    multiple: true,
+    accept: "image/png,image/jpeg,image/webp",
+    showUploadList: false,
+    fileList,
+    beforeUpload: (_file: File, allFiles: File[]) => {
+      replaceFiles(allFiles);
+      return false;
+    },
+    onRemove: () => replaceFiles([])
+  };
 
-      <div className="main-stage">
-        <div className="image-stage">
+  const jobColumns: ColumnsType<BatchJob> = [
+    {
+      title: "任务",
+      dataIndex: "id",
+      key: "id",
+      width: 200,
+      render: (_, job) => (
+        <div className="flex flex-col">
+          <Text strong style={{ fontSize: 12 }}>{job.id}</Text>
+          <Text type="secondary" style={{ fontSize: 10 }}>{job.createdAt}</Text>
+        </div>
+      )
+    },
+    { title: "场景", dataIndex: "sceneName", key: "sceneName" },
+    {
+      title: "输入/输出",
+      key: "count",
+      width: 110,
+      render: (_, job) => `${job.imageCount} / ${job.outputCount}`
+    },
+    {
+      title: "输出目录",
+      dataIndex: "outputDir",
+      key: "outputDir",
+      render: (_, job) => (
+        <Space size={4}>
+          <Button
+            size="small"
+            type="link"
+            icon={<FolderOpenOutlined />}
+            onClick={(event) => {
+              event.stopPropagation();
+              void openOutputDir(job);
+            }}
+          >
+            {job.outputDir}
+          </Button>
+          <Button
+            size="small"
+            type="link"
+            icon={<DownloadOutlined />}
+            disabled={job.outputCount === 0}
+            onClick={(event) => {
+              event.stopPropagation();
+              downloadOutput(job);
+            }}
+          >
+            下载
+          </Button>
+        </Space>
+      )
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 80,
+      render: (status: BatchJob["status"]) =>
+        status === "completed" ? (
+          <Tag color="green">完成</Tag>
+        ) : status === "running" ? (
+          <Tag color="processing">进行中</Tag>
+        ) : (
+          <Tag color="red">失败</Tag>
+        )
+    },
+    {
+      title: "复核",
+      dataIndex: "reviewStatus",
+      key: "reviewStatus",
+      width: 90,
+      render: (status: ReviewStatus = "pending_review") => (
+        <Tag color={REVIEW_META[status].color} style={{ marginInlineEnd: 0 }}>
+          {REVIEW_META[status].label}
+        </Tag>
+      )
+    },
+    {
+      title: "明细",
+      key: "detail",
+      ellipsis: true,
+      render: (_, job) => (
+        <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+          {job.images.find((image) => image.error)?.error || `${job.images.length} 张图片`}
+        </Text>
+      )
+    }
+  ];
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-[420px_minmax(0,1fr)]">
+      <Card
+        size="small"
+        title={
+          <div className="flex flex-col gap-0.5">
+            <Title level={5} style={{ margin: 0 }}>批量任务</Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>选择品牌场景，多图批量跑姿态识别和裁切输出</Text>
+          </div>
+        }
+      >
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+          <div className="flex flex-col gap-1">
+            <Text type="secondary" style={{ fontSize: 12 }}>场景</Text>
+            <Select
+              value={selectedScene?.id}
+              onChange={(value) => setSceneId(value)}
+              options={activeScenes.map((scene) => ({
+                value: scene.id,
+                label: `${scene.name} · ${scene.brand || "未设置品牌"}`
+              }))}
+              placeholder="选择场景"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Text type="secondary" style={{ fontSize: 12 }}>输出目录</Text>
+            <Input
+              prefix={<FolderOpenOutlined />}
+              value={outputDir}
+              onChange={(event) => setOutputDir(event.target.value)}
+              placeholder="例如 C:\\exports\\brand-a 或 outputs"
+            />
+          </div>
+
+          <Upload.Dragger {...uploadProps}>
+            <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+            <p className="ant-upload-text">
+              {files.length === 0 ? "上传多张原图" : `${files.length} 张原图待处理`}
+            </p>
+          </Upload.Dragger>
+
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlayCircleOutlined />}
+              loading={isRunning}
+              onClick={runJob}
+            >
+              {isRunning ? "任务执行中" : "开始批量任务"}
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => replaceFiles([])}>清空</Button>
+          </Space>
+
+          <div className="grid grid-cols-3 gap-2">
+            <Statistic title="原图" value={files.length} styles={{ content: { fontSize: 16 } }} />
+            <Statistic title="预设" value={selectedScene?.presetIds.length ?? 0} styles={{ content: { fontSize: 16 } }} />
+            <Statistic
+              title="预期输出"
+              value={files.length * (selectedScene?.presetIds.length ?? 0)}
+              styles={{ content: { fontSize: 16 } }}
+            />
+          </div>
+
+          {progress && <ProgressPanel progress={progress} />}
+
+          {selectedScene && (
+            <Card size="small" type="inner" title={selectedScene.brand || selectedScene.name}>
+              <Space orientation="vertical" size={4} style={{ width: "100%" }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {selectedScene.description || "暂无说明"}
+                </Text>
+                {selectedScene.tags.length > 0 && (
+                  <Space size={4} wrap>
+                    {selectedScene.tags.map((tag) => <Tag key={tag}>{tag}</Tag>)}
+                  </Space>
+                )}
+              </Space>
+            </Card>
+          )}
+
+          {files.length > 0 && (
+            <Card size="small" type="inner" title="文件列表" styles={{ body: { padding: 0, maxHeight: 200, overflow: "auto" } }}>
+              {files.map((file) => (
+                <div
+                  key={`${file.name}-${file.lastModified}`}
+                  className="flex items-center justify-between border-b border-[#f0f1ed] px-3 py-2 text-xs last:border-b-0"
+                >
+                  <span className="truncate">{file.name}</span>
+                  <Text type="secondary" style={{ fontSize: 10 }}>{Math.round(file.size / 1024)} KB</Text>
+                </div>
+              ))}
+            </Card>
+          )}
+        </Space>
+      </Card>
+
+      <div className="flex flex-col gap-3">
+        <Card
+          size="small"
+          title={selectedJob ? selectedJob.sceneName : "任务详情"}
+          extra={
+            selectedJob && (
+              <Space>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => void updateJobReview(selectedJob, "approved")}
+                >
+                  整单通过
+                </Button>
+                <Button
+                  size="small"
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => void updateJobReview(selectedJob, "rejected")}
+                >
+                  整单驳回
+                </Button>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  disabled={isRunning || rerunnableFiles.length === 0}
+                  onClick={rerunSelectedJob}
+                >
+                  重跑异常
+                </Button>
+              </Space>
+            )
+          }
+        >
           {selectedJob ? (
-            <div className="job-detail-view">
-              <div className="result-header">
-                <div>
-                  <h2>{selectedJob.sceneName}</h2>
-                  <span className="table-note">{selectedJob.id}</span>
-                </div>
-                <div className="row-actions">
-                  <button type="button" className="review-action approve" onClick={() => void updateJobReview(selectedJob, "approved")}>
-                    <CheckCircle2 size={15} />
-                    <span>整单通过</span>
-                  </button>
-                  <button type="button" className="review-action reject" onClick={() => void updateJobReview(selectedJob, "rejected")}>
-                    <XCircle size={15} />
-                    <span>整单驳回</span>
-                  </button>
-                  <button type="button" className="review-action" onClick={rerunSelectedJob} disabled={isRunning || rerunnableFiles.length === 0}>
-                    <RotateCcw size={15} />
-                    <span>重跑异常</span>
-                  </button>
-                </div>
-              </div>
-              <div className="job-detail-grid">
-                <JobImageList
-                  job={selectedJob}
-                  activeFilename={active?.filename}
-                  onSelect={(filename) => {
-                    const index = selectedResults.findIndex((result) => result.filename === filename);
-                    setActiveResult(Math.max(0, index));
-                  }}
-                  onReview={(filename, reviewStatus) => void updateImageReview(selectedJob, filename, reviewStatus)}
-                />
-                <div className="job-output-panel">
-                  {active ? (
-                    <>
-                      <div className="result-header compact">
-                        <h2>{active.filename}</h2>
-                        <span>{active.crops.length} 张输出</span>
-                      </div>
-                      <div className="crop-grid">
-                        {active.crops.map((crop) => (
-                          <CropCard key={`${active.filename}-${crop.presetId}`} filename={active.filename ?? "image"} crop={crop} />
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="empty-state compact">历史任务只保留任务明细；当前页面执行的任务会显示裁切预览。</div>
-                  )}
-                </div>
+            <div className="grid gap-3 md:grid-cols-[260px_minmax(0,1fr)]">
+              <JobImageList
+                job={selectedJob}
+                activeFilename={active?.filename}
+                onSelect={(filename) => {
+                  const index = selectedResults.findIndex((result) => result.filename === filename);
+                  setActiveResult(Math.max(0, index));
+                }}
+                onReview={(filename, reviewStatus) =>
+                  void updateImageReview(selectedJob, filename, reviewStatus)
+                }
+              />
+              <div>
+                {active ? (
+                  <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+                    <div className="flex items-center justify-between">
+                      <Text strong>{active.filename}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{active.crops.length} 张输出</Text>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {active.crops.map((crop) => (
+                        <CropCard
+                          key={`${active.filename}-${crop.presetId}`}
+                          filename={active.filename ?? "image"}
+                          crop={crop}
+                        />
+                      ))}
+                    </div>
+                  </Space>
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="历史任务只保留任务明细；当前页面执行的任务会显示裁切预览"
+                  />
+                )}
               </div>
             </div>
           ) : (
-            <div className="empty-state">任务完成后查看每张图的输出</div>
+            <Empty description="任务完成后查看每张图的输出" />
           )}
-        </div>
-        <div className="result-panel job-history-panel">
-          <div className="result-header">
-            <h2>任务记录</h2>
-            <span>{jobs.length} 条</span>
-          </div>
-          <div className="job-table-shell">
-            <table className="preset-data-table">
-              <thead>
-                <tr>
-                  <th>任务</th>
-                  <th>场景</th>
-                  <th>输入/输出</th>
-                  <th>输出目录</th>
-                  <th>状态</th>
-                  <th>复核</th>
-                  <th>明细</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => (
-                  <tr key={job.id} className={selectedJob?.id === job.id ? "selected" : ""} onClick={() => setSelectedJobId(job.id)}>
-                    <td>
-                      <strong>{job.id}</strong>
-                      <span>{job.createdAt}</span>
-                    </td>
-                    <td>{job.sceneName}</td>
-                    <td>{job.imageCount} / {job.outputCount}</td>
-                    <td>
-                      <div className="output-actions">
-                        <button type="button" className="output-dir-button" onClick={(event) => { event.stopPropagation(); void openOutputDir(job); }}>
-                          <FolderInput size={14} />
-                          <span>{job.outputDir}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="download-output-button"
-                          disabled={job.outputCount === 0}
-                          onClick={(event) => { event.stopPropagation(); downloadOutput(job); }}
-                        >
-                          <Download size={14} />
-                          下载
-                        </button>
-                      </div>
-                    </td>
-                    <td><span className={`status-pill ${job.status === "completed" ? "ready" : "incomplete"}`}>{job.status === "completed" ? "完成" : "失败"}</span></td>
-                    <td><span className={`status-pill ${reviewClass(job.reviewStatus)}`}>{reviewLabel(job.reviewStatus)}</span></td>
-                    <td>
-                      <span className="table-note">
-                        {job.images.find((image) => image.error)?.error || `${job.images.length} 张图片`}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {jobs.length === 0 && <div className="empty-state compact">暂无任务记录</div>}
-          </div>
-        </div>
+        </Card>
+
+        <Card
+          size="small"
+          title="任务记录"
+          extra={<Text type="secondary" style={{ fontSize: 12 }}>{jobs.length} 条</Text>}
+        >
+          <Table
+            rowKey="id"
+            size="small"
+            columns={jobColumns}
+            dataSource={jobs}
+            pagination={{ pageSize: 10, hideOnSinglePage: true, size: "small" }}
+            rowClassName={(job) => (selectedJob?.id === job.id ? "bg-[#e3efed]" : "")}
+            onRow={(job) => ({
+              onClick: () => setSelectedJobId(job.id),
+              style: { cursor: "pointer" }
+            })}
+            locale={{ emptyText: <Empty description="暂无任务记录" /> }}
+          />
+        </Card>
       </div>
-    </section>
+    </div>
   );
 }
 
 function ProgressPanel({ progress }: { progress: RunProgress }) {
   const percent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
   return (
-    <div className="progress-panel">
-      <div className="result-header compact">
-        <strong>{progress.jobId || "任务准备中"}</strong>
-        <span>{progress.completed}/{progress.total}</span>
-      </div>
-      <div className="progress-bar"><span style={{ width: `${percent}%` }} /></div>
-      <div className="progress-meta">
-        <span>{progress.activeFilename || "等待开始"}</span>
-        <span>{progress.presetCount} 个预设</span>
-      </div>
-      <div className="progress-events">
-        {progress.events.slice(-4).map((event) => (
-          <span key={`${event.filename}-${event.outputs}-${event.error ?? ""}`} className={event.error ? "failed" : ""}>
-            {event.error ? <AlertTriangle size={13} /> : <CheckCircle2 size={13} />}
-            {event.filename} · {event.error || `${event.outputs} 张输出`}
-          </span>
-        ))}
-      </div>
-    </div>
+    <Card size="small" type="inner" title={progress.jobId || "任务准备中"} extra={<Text type="secondary" style={{ fontSize: 12 }}>{progress.completed}/{progress.total}</Text>}>
+      <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+        <Progress percent={percent} size="small" status={percent === 100 ? "success" : "active"} />
+        <div className="flex items-center justify-between">
+          <Text type="secondary" style={{ fontSize: 11 }}>{progress.activeFilename || "等待开始"}</Text>
+          <Tag color="cyan">{progress.presetCount} 个预设</Tag>
+        </div>
+        <div className="flex flex-col gap-1">
+          {progress.events.slice(-5).map((event, index) => (
+            <div
+              key={`${event.filename}-${index}`}
+              className={`flex items-center gap-1.5 text-xs ${event.error ? "text-[#cf1322]" : "text-[#3a4654]"}`}
+            >
+              {event.error ? <WarningOutlined /> : <CheckCircleOutlined />}
+              <Text style={{ fontSize: 11 }} ellipsis>
+                {event.filename} · {event.error || `${event.outputs} 张输出`}
+              </Text>
+            </div>
+          ))}
+        </div>
+      </Space>
+    </Card>
   );
 }
 
@@ -497,59 +663,54 @@ function JobImageList({
   onReview: (filename: string, reviewStatus: ReviewStatus) => void;
 }) {
   return (
-    <div className="job-image-list">
-      {job.images.map((image) => (
-        <button
-          key={image.filename}
-          type="button"
-          className={activeFilename === image.filename ? "active" : ""}
-          onClick={() => onSelect(image.filename)}
-        >
-          <span>
-            <strong>{image.filename}</strong>
-            <small>{image.error || `${image.outputs} 张输出`} · {reviewLabel(image.reviewStatus)}</small>
-          </span>
-          <span className="image-review-actions">
-            <span className={`status-pill ${reviewClass(image.reviewStatus)}`}>{reviewLabel(image.reviewStatus)}</span>
-            <span
-              role="button"
-              tabIndex={0}
-              className="mark-image-rejected"
-              onClick={(event) => {
-                event.stopPropagation();
-                onReview(image.filename, "rejected");
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") onReview(image.filename, "rejected");
-              }}
+    <div className="flex max-h-[520px] flex-col overflow-auto rounded-md border border-[#e6ebe6]">
+      {job.images.map((image) => {
+        const reviewStatus = image.reviewStatus ?? "pending_review";
+        return (
+          <div
+            key={image.filename}
+            className={`flex flex-col gap-1 border-b border-[#f0f1ed] px-3 py-2 last:border-b-0 ${
+              activeFilename === image.filename ? "bg-[#e3efed]" : "hover:bg-[#f7f8f5]"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => onSelect(image.filename)}
+              className="flex w-full flex-col items-start gap-0.5 text-left text-xs"
             >
-              标异常
-            </span>
-          </span>
-        </button>
-      ))}
+              <Text strong style={{ fontSize: 12, maxWidth: 220 }} ellipsis>
+                {image.filename}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {image.error || `${image.outputs} 张输出`}
+              </Text>
+            </button>
+            <div className="flex items-center justify-between">
+              <Tag color={REVIEW_META[reviewStatus].color} style={{ marginInlineEnd: 0, fontSize: 10 }}>
+                {REVIEW_META[reviewStatus].label}
+              </Tag>
+              <Button
+                size="small"
+                type="text"
+                danger
+                onClick={() => onReview(image.filename, "rejected")}
+              >
+                标异常
+              </Button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function filesForRerun(files: File[], job?: BatchJob) {
+function filesForRerun(files: File[], job?: BatchJob): File[] {
   if (!job) return [];
   const targets = new Set(
     job.images
-      .filter((image) => image.error || image.reviewStatus === "rejected")
+      .filter((image: BatchJobImage) => image.error || image.reviewStatus === "rejected")
       .map((image) => image.filename)
   );
   return files.filter((file) => targets.has(file.name));
-}
-
-function reviewLabel(reviewStatus: ReviewStatus = "pending_review") {
-  if (reviewStatus === "approved") return "已通过";
-  if (reviewStatus === "rejected") return "异常";
-  return "待复核";
-}
-
-function reviewClass(reviewStatus: ReviewStatus = "pending_review") {
-  if (reviewStatus === "approved") return "ready";
-  if (reviewStatus === "rejected") return "danger";
-  return "incomplete";
 }

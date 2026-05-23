@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
-import { Check, Eye, EyeOff, ScanSearch } from "lucide-react";
+import { CheckOutlined, EyeInvisibleOutlined, EyeOutlined, ScanOutlined } from "@ant-design/icons";
+import { Button, Card, Image as AntImage, Segmented, Space, Tag, Typography } from "antd";
 import { NumberField } from "./NumberField";
 import type { CropDragState, ResizeHandle, TrainingSample } from "../types";
 import {
@@ -10,12 +11,20 @@ import {
   personBounds
 } from "../utils/cropTraining";
 
+const { Text } = Typography;
+
 type TrainingCardProps = {
   aspectRatio: number;
   sample: TrainingSample;
   onConfirm: (sample: TrainingSample) => void;
   onPreview: (sample: TrainingSample) => void;
   onUpdate: (id: string, patch: Partial<TrainingSample>) => void;
+};
+
+const PROVIDER_COLORS: Record<string, string> = {
+  rtmw: "geekblue",
+  heuristic: "gold",
+  unknown: "default"
 };
 
 export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpdate }: TrainingCardProps) {
@@ -139,11 +148,7 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
     const currentCrop = cropRef.current;
     const handle = hitResizeHandle(point, currentCrop, sample.source.width, sample.source.height);
     if (handle) {
-      dragStateRef.current = {
-        mode: "resize",
-        handle,
-        origin: { ...currentCrop }
-      };
+      dragStateRef.current = { mode: "resize", handle, origin: { ...currentCrop } };
     } else if (isPointInsideCrop(point, currentCrop)) {
       dragStateRef.current = {
         mode: "move",
@@ -207,90 +212,102 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
 
   const updateCrop = (patch: Partial<TrainingSample["crop"]>) => {
     const next = { ...cropRef.current, ...patch };
-    if (patch.width !== undefined) {
-      next.height = patch.width / aspectRatio;
-    }
-    if (patch.height !== undefined) {
-      next.width = patch.height * aspectRatio;
-    }
+    if (patch.width !== undefined) next.height = patch.width / aspectRatio;
+    if (patch.height !== undefined) next.width = patch.height * aspectRatio;
     cropRef.current = clampCrop(next, sample.source.width, sample.source.height);
     scheduleDraw();
     onUpdate(sample.id, { crop: cropRef.current });
   };
 
+  const provider = sample.poseProvider ?? "unknown";
+
   return (
-    <article className="calibration-card">
-      <div className="training-canvas-wrap">
-        <canvas
-          ref={canvasRef}
-          className="training-canvas"
-          width={sample.source.width}
-          height={sample.source.height}
-          role="img"
-          aria-label={`${sample.filename} crop editor`}
-          onPointerDown={startDraw}
-          onPointerMove={updateDraw}
-          onPointerUp={finishDraw}
-          onPointerCancel={finishDraw}
-        />
-      </div>
-      <div className="calibration-fields">
-        <strong>{sample.filename}</strong>
-        <span>
-          {sample.source.width}x{sample.source.height} · pose conf {sample.confidence.toFixed(2)} · crop{" "}
-          {Math.round(sample.crop.width)}x{Math.round(sample.crop.height)} · ratio {aspectRatio.toFixed(3)}
-        </span>
-        <div className={`pose-provider-pill ${sample.poseProvider ?? "unknown"}`}>
-          姿态引擎：{providerLabel(sample.poseProvider)}
+    <Card size="small" styles={{ body: { padding: 12 } }}>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="overflow-hidden rounded-md border border-[#e6ebe6] bg-[#f4f6f5]">
+          <canvas
+            ref={canvasRef}
+            width={sample.source.width}
+            height={sample.source.height}
+            className="block w-full"
+            style={{ touchAction: "none" }}
+            role="img"
+            aria-label={`${sample.filename} crop editor`}
+            onPointerDown={startDraw}
+            onPointerMove={updateDraw}
+            onPointerUp={finishDraw}
+            onPointerCancel={finishDraw}
+          />
         </div>
-        <button type="button" className="pose-toggle" onClick={() => setShowPose((visible) => !visible)}>
-          {showPose ? <EyeOff size={16} /> : <Eye size={16} />}
-          <span>{showPose ? "隐藏 OpenPose" : "显示 OpenPose"}</span>
-        </button>
-        <div className="sample-set-switch" aria-label="样本用途">
-          <button
-            type="button"
-            className={sample.set === "train" ? "active" : ""}
-            onClick={() => onUpdate(sample.id, { set: "train" })}
-          >
-            训练集
-          </button>
-          <button
-            type="button"
-            className={sample.set === "test" ? "active" : ""}
-            onClick={() => onUpdate(sample.id, { set: "test" })}
-          >
-            测试集
-          </button>
-        </div>
-        <div className="crop-action-row">
-          <button type="button" className="preview-crop-button" onClick={() => onPreview(sample)}>
-            <ScanSearch size={16} />
-            <span>预览裁切</span>
-          </button>
-          <button
-            type="button"
-            className={`confirm-crop-button ${sample.confirmed ? "confirmed" : ""}`}
-            onClick={() => onConfirm(sample)}
-            disabled={!sample.cropPreviewUrl && !sample.confirmed}
-          >
-          <Check size={16} />
-            <span>{sample.confirmed ? "已确认" : "确认样本"}</span>
-          </button>
-        </div>
-        {sample.cropPreviewUrl && (
-          <div className="crop-preview">
-            <img src={sample.cropPreviewUrl} alt={`${sample.filename} crop preview`} />
+        <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+          <div>
+            <Text strong style={{ fontSize: 13 }}>{sample.filename}</Text>
+            <div>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {sample.source.width}x{sample.source.height} · 置信 {sample.confidence.toFixed(2)}
+              </Text>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                裁切 {Math.round(sample.crop.width)}x{Math.round(sample.crop.height)} · 比 {aspectRatio.toFixed(3)}
+              </Text>
+            </div>
           </div>
-        )}
-        <div className="grid-two">
-          <NumberField label="裁切 X" value={Math.round(sample.crop.left)} onChange={(left) => updateCrop({ left })} />
-          <NumberField label="裁切 Y" value={Math.round(sample.crop.top)} onChange={(top) => updateCrop({ top })} />
-          <NumberField label="裁切宽" value={Math.round(sample.crop.width)} onChange={(width) => updateCrop({ width })} />
-          <NumberField label="裁切高" value={Math.round(sample.crop.height)} onChange={(height) => updateCrop({ height })} />
-        </div>
+          <Tag color={PROVIDER_COLORS[provider]} style={{ marginInlineEnd: 0 }}>
+            姿态引擎：{providerLabel(provider)}
+          </Tag>
+          <Button
+            size="small"
+            icon={showPose ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+            onClick={() => setShowPose((visible) => !visible)}
+            block
+          >
+            {showPose ? "隐藏 OpenPose" : "显示 OpenPose"}
+          </Button>
+          <div className="flex flex-col gap-1">
+            <Text type="secondary" style={{ fontSize: 11 }}>样本用途</Text>
+            <Segmented
+              size="small"
+              block
+              value={sample.set ?? "train"}
+              options={[
+                { label: "训练集", value: "train" },
+                { label: "测试集", value: "test" }
+              ]}
+              onChange={(value) => onUpdate(sample.id, { set: value as "train" | "test" })}
+            />
+          </div>
+          <Space size={4} style={{ width: "100%" }}>
+            <Button size="small" icon={<ScanOutlined />} onClick={() => onPreview(sample)} block>
+              预览
+            </Button>
+            <Button
+              size="small"
+              type={sample.confirmed ? "default" : "primary"}
+              icon={<CheckOutlined />}
+              disabled={!sample.cropPreviewUrl && !sample.confirmed}
+              onClick={() => onConfirm(sample)}
+              block
+            >
+              {sample.confirmed ? "已确认" : "确认"}
+            </Button>
+          </Space>
+          {sample.cropPreviewUrl && (
+            <AntImage
+              src={sample.cropPreviewUrl}
+              alt={`${sample.filename} crop preview`}
+              style={{ borderRadius: 6, objectFit: "contain" }}
+            />
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <NumberField label="裁切 X" value={Math.round(sample.crop.left)} onChange={(left) => updateCrop({ left })} />
+            <NumberField label="裁切 Y" value={Math.round(sample.crop.top)} onChange={(top) => updateCrop({ top })} />
+            <NumberField label="裁切宽" value={Math.round(sample.crop.width)} onChange={(width) => updateCrop({ width })} />
+            <NumberField label="裁切高" value={Math.round(sample.crop.height)} onChange={(height) => updateCrop({ height })} />
+          </div>
+        </Space>
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -431,7 +448,7 @@ function clampValue(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
 }
 
-function providerLabel(provider: TrainingSample["poseProvider"]) {
+function providerLabel(provider: TrainingSample["poseProvider"] | string) {
   if (provider === "rtmw") return "RTMW-l ONNX";
   if (provider === "heuristic") return "旧方案 / Heuristic";
   return "未知 / 旧数据";

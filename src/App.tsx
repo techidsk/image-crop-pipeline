@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
+import { App as AntdApp, Layout } from "antd";
 import {
   fetchBatchJobs,
   fetchPresets,
@@ -19,6 +20,8 @@ import { PresetListPage } from "./pages/PresetListPage";
 import { SceneListPage } from "./pages/SceneListPage";
 import { ViewTestPage } from "./pages/ViewTestPage";
 import type { AppView, BatchJob, CropPreset, CropScene, PoseProviderId } from "./types";
+
+const { Content } = Layout;
 
 const pathForRoute = (view: AppView, presetId?: string) => {
   if (view === "batchJobs") return "/jobs";
@@ -64,6 +67,7 @@ function PresetEditorRoute({ presets, allTags, poseProvider, onUpdate, onBack }:
 export function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { message } = AntdApp.useApp();
   const [presets, setPresets] = useState<CropPreset[]>(defaultPresets);
   const [scenes, setScenes] = useState<CropScene[]>([]);
   const [jobs, setJobs] = useState<BatchJob[]>([]);
@@ -123,7 +127,12 @@ export function App() {
   };
 
   const syncStorage = async () => {
-    setStorageStatus(await triggerStorageSync());
+    try {
+      setStorageStatus(await triggerStorageSync());
+      void message.success("云端同步完成");
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : "云端同步失败");
+    }
   };
 
   const updateJob = (job: BatchJob) => {
@@ -194,7 +203,7 @@ export function App() {
   };
 
   return (
-    <main className="app-shell">
+    <Layout style={{ minHeight: "100vh" }}>
       <Sidebar
         view={view}
         error={error}
@@ -204,77 +213,79 @@ export function App() {
         onPoseProviderChange={setPoseProvider}
         onSyncStorage={syncStorage}
       />
-      <section className="page-shell">
-        <Routes>
-          <Route path="/" element={<Navigate to="/batch" replace />} />
-          <Route
-            path="/batch"
-            element={
-              <BatchPage
-                allTags={allTags}
-                activeTags={activeTags}
-                presets={selectedPresets}
-                poseProvider={poseProvider}
-                onToggleTag={(tag) =>
-                  setActiveTags((current) =>
-                    current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
-                  )
-                }
-              />
-            }
-          />
-          <Route
-            path="/jobs"
-            element={
-              <BatchJobsPage
-                scenes={scenes}
-                jobs={jobs}
-                poseProvider={poseProvider}
-                onJobCreated={(job) => setJobs((current) => [job, ...current])}
-                onJobUpdated={updateJob}
-              />
-            }
-          />
-          <Route path="/view-test" element={<ViewTestPage poseProvider={poseProvider} />} />
-          <Route
-            path="/scenes"
-            element={
-              <SceneListPage
-                scenes={scenes}
-                presets={presets}
-                onSave={(nextScenes) => void saveScenes(nextScenes)}
-              />
-            }
-          />
-          <Route
-            path="/presets"
-            element={
-              <PresetListPage
-                allTags={allTags}
-                presets={presets}
-                onAdd={addPreset}
-                onDuplicate={duplicatePreset}
-                onEdit={openEditor}
-                onSetStatus={(id, status) => updatePreset(id, { status })}
-                poseProvider={poseProvider}
-              />
-            }
-          />
-          <Route
-            path="/presets/:presetId"
-            element={
-              <PresetEditorRoute
-                presets={presets}
-                allTags={allTags}
-                poseProvider={poseProvider}
-                onUpdate={updatePreset}
-                onBack={() => navigateTo("presetList")}
-              />
-            }
-          />
-          <Route path="*" element={<Navigate to="/batch" replace />} />
-        </Routes>
-      </section>
-    </main>
+      <Layout>
+        <Content style={{ padding: 16, overflow: "auto" }}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/batch" replace />} />
+            <Route
+              path="/batch"
+              element={
+                <BatchPage
+                  allTags={allTags}
+                  activeTags={activeTags}
+                  presets={selectedPresets}
+                  poseProvider={poseProvider}
+                  onToggleTag={(tag) =>
+                    setActiveTags((current) =>
+                      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+                    )
+                  }
+                />
+              }
+            />
+            <Route
+              path="/jobs"
+              element={
+                <BatchJobsPage
+                  scenes={scenes}
+                  jobs={jobs}
+                  poseProvider={poseProvider}
+                  onJobCreated={(job) => setJobs((current) => [job, ...current])}
+                  onJobUpdated={updateJob}
+                />
+              }
+            />
+            <Route path="/view-test" element={<ViewTestPage poseProvider={poseProvider} />} />
+            <Route
+              path="/scenes"
+              element={
+                <SceneListPage
+                  scenes={scenes}
+                  presets={presets}
+                  onSave={(nextScenes) => void saveScenes(nextScenes)}
+                />
+              }
+            />
+            <Route
+              path="/presets"
+              element={
+                <PresetListPage
+                  allTags={allTags}
+                  presets={presets}
+                  onAdd={addPreset}
+                  onDuplicate={duplicatePreset}
+                  onEdit={openEditor}
+                  onSetStatus={(id, status) => updatePreset(id, { status })}
+                  poseProvider={poseProvider}
+                />
+              }
+            />
+            <Route
+              path="/presets/:presetId"
+              element={
+                <PresetEditorRoute
+                  presets={presets}
+                  allTags={allTags}
+                  poseProvider={poseProvider}
+                  onUpdate={updatePreset}
+                  onBack={() => navigateTo("presetList")}
+                />
+              }
+            />
+            <Route path="*" element={<Navigate to="/batch" replace />} />
+          </Routes>
+        </Content>
+      </Layout>
+    </Layout>
   );
 }

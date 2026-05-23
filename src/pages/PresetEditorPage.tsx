@@ -1,13 +1,39 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ImageUp, Plus, RefreshCw, Save, Wand2, X } from "lucide-react";
+import {
+  ArrowLeftOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  ThunderboltOutlined,
+  UploadOutlined
+} from "@ant-design/icons";
+import {
+  App,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  Empty,
+  Input,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  Upload
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { viewAngleLabels } from "../constants";
 import { NumberField } from "../components/NumberField";
 import { TrainingCard } from "../components/TrainingCard";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import type { CropPreset, LearnedComposition, PoseProviderId, TrainingSample, ViewAngle } from "../types";
+import type {
+  CropPreset,
+  LearnedComposition,
+  PoseProviderId,
+  PresetStatus,
+  TrainingSample,
+  ViewAngle
+} from "../types";
 import {
   compositionForSample,
   filterModels,
@@ -18,6 +44,9 @@ import {
   semanticAnchorLabel,
   summarizeSemanticComposition
 } from "../utils/cropTraining";
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 type ModelWithSample = LearnedComposition & {
   sampleId: string;
@@ -52,28 +81,35 @@ type PresetEditorPageProps = {
   onUpdate: (id: string, patch: Partial<CropPreset>) => void;
 };
 
-const maxTagsPerPreset = 8;
-const tagPattern = /^[a-z0-9][a-z0-9_-]{0,23}$/;
+const viewAngles: ViewAngle[] = ["front", "side", "back"];
+
+const STATUS_META: Record<PresetStatus, { label: string; color: string }> = {
+  draft: { label: "草稿", color: "default" },
+  incomplete: { label: "残缺策略", color: "gold" },
+  ready: { label: "正式策略", color: "green" },
+  archived: { label: "已停用", color: "red" }
+};
 
 export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpdate }: PresetEditorPageProps) {
+  const { message } = App.useApp();
   const [samples, setSamples] = useState<TrainingSample[]>([]);
   const [selectedSampleId, setSelectedSampleId] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [trainingMessage, setTrainingMessage] = useState("");
   const [diagnostics, setDiagnostics] = useState<TrainingDiagnostics | null>(null);
-  const trainingInputRef = useRef<HTMLInputElement>(null);
   const confirmedSamples = samples.filter((sample) => sample.confirmed);
   const trainSamples = confirmedSamples.filter((sample) => sample.set === "train");
   const testSamples = confirmedSamples.filter((sample) => sample.set === "test");
   const selectedSample = samples.find((sample) => sample.id === selectedSampleId) ?? samples[0];
   const activeViewAngles = preset.viewAngles?.length ? preset.viewAngles : viewAngles;
+  const loadedRef = useRef("");
 
   useEffect(() => {
+    if (loadedRef.current === preset.id) return;
+    loadedRef.current = preset.id;
     void loadSavedSamples();
   }, [preset.id]);
 
   const loadSavedSamples = async () => {
-    setTrainingMessage("");
     try {
       const response = await fetch(`/api/presets/${encodeURIComponent(preset.id)}/training-samples`);
       if (!response.ok) throw new Error("训练样本加载失败");
@@ -83,7 +119,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
       setSelectedSampleId(loaded[0]?.id ?? "");
       setDiagnostics(null);
     } catch (err) {
-      setTrainingMessage(err instanceof Error ? err.message : "训练样本加载失败");
+      void message.error(err instanceof Error ? err.message : "训练样本加载失败");
     }
   };
 
@@ -99,12 +135,9 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
     }
   };
 
-  const loadTrainingSamples = async (selected: FileList | null) => {
-    const files = Array.from(selected ?? []);
+  const loadTrainingSamples = async (files: File[]) => {
     if (files.length === 0) return;
-
     setIsAnalyzing(true);
-    setTrainingMessage("");
     try {
       const formData = new FormData();
       files.forEach((file) => formData.append("images", file));
@@ -132,18 +165,19 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
           ? sample
           : {
               ...sample,
-          crop,
+              crop,
               confidence: bounds?.confidence ?? sample.confidence,
               cropPreviewUrl: null
             };
       });
       setSamples(nextSamples);
       void persistSamples(nextSamples).catch((err) =>
-        setTrainingMessage(err instanceof Error ? err.message : "训练样本保存失败")
+        message.error(err instanceof Error ? err.message : "训练样本保存失败")
       );
       setSelectedSampleId((current) => current || nextSamples[0]?.id || "");
+      void message.success(`已上传 ${files.length} 个样本`);
     } catch (err) {
-      setTrainingMessage(err instanceof Error ? err.message : "样本上传失败");
+      void message.error(err instanceof Error ? err.message : "样本上传失败");
     } finally {
       setIsAnalyzing(false);
     }
@@ -151,15 +185,14 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
 
   const reanalyzeUnknownSamples = async () => {
     setIsAnalyzing(true);
-    setTrainingMessage("");
     try {
       const formData = new FormData();
       formData.append("pose_provider", poseProvider);
       formData.append("only_unknown", "true");
-      const response = await fetch(`/api/presets/${encodeURIComponent(preset.id)}/training-samples/reanalyze`, {
-        method: "POST",
-        body: formData
-      });
+      const response = await fetch(
+        `/api/presets/${encodeURIComponent(preset.id)}/training-samples/reanalyze`,
+        { method: "POST", body: formData }
+      );
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.detail ?? "样本重新识别失败");
@@ -168,9 +201,9 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
       const nextSamples = normalizeSamples(body.samples);
       setSamples(nextSamples);
       setSelectedSampleId((current) => current || nextSamples[0]?.id || "");
-      setTrainingMessage(`已使用 ${providerLabel(poseProvider)} 重新识别未知来源样本。`);
+      void message.success(`已使用 ${providerLabel(poseProvider)} 重新识别未知来源样本`);
     } catch (err) {
-      setTrainingMessage(err instanceof Error ? err.message : "样本重新识别失败");
+      void message.error(err instanceof Error ? err.message : "样本重新识别失败");
     } finally {
       setIsAnalyzing(false);
     }
@@ -188,7 +221,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
           : sample
       );
       void persistSamples(nextSamples).catch((err) =>
-        setTrainingMessage(err instanceof Error ? err.message : "训练样本保存失败")
+        message.error(err instanceof Error ? err.message : "训练样本保存失败")
       );
       return nextSamples;
     });
@@ -197,35 +230,35 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
   const previewSample = async (sample: TrainingSample) => {
     try {
       const cropPreviewUrl = await renderCropPreview(sample);
-      setSamples((current) => current.map((item) => (item.id === sample.id ? { ...item, cropPreviewUrl } : item)));
-      setTrainingMessage("");
+      setSamples((current) =>
+        current.map((item) => (item.id === sample.id ? { ...item, cropPreviewUrl } : item))
+      );
     } catch (err) {
-      setTrainingMessage(err instanceof Error ? err.message : "裁切预览生成失败");
+      void message.error(err instanceof Error ? err.message : "裁切预览生成失败");
     }
   };
 
   const confirmSample = async (sample: TrainingSample) => {
-    if (!sample.cropPreviewUrl) {
-      await previewSample(sample);
-    }
+    if (!sample.cropPreviewUrl) await previewSample(sample);
     setSamples((current) => {
-      const nextSamples = current.map((item) => (item.id === sample.id ? { ...item, confirmed: true } : item));
+      const nextSamples = current.map((item) =>
+        item.id === sample.id ? { ...item, confirmed: true } : item
+      );
       void persistSamples(nextSamples).catch((err) =>
-        setTrainingMessage(err instanceof Error ? err.message : "训练样本保存失败")
+        message.error(err instanceof Error ? err.message : "训练样本保存失败")
       );
       return nextSamples;
     });
-    setTrainingMessage("");
   };
 
   const saveIncompletePreset = () => {
     if (trainSamples.length === 0) {
-      setTrainingMessage("至少需要确认 1 组训练样本，才能保存残缺策略。");
+      void message.warning("至少需要确认 1 组训练样本，才能保存残缺策略");
       return;
     }
     const models = makeTrainingModels(trainSamples);
     if (models.length === 0) {
-      setTrainingMessage("当前训练样本缺少有效 OpenPose 人体范围，无法保存策略。");
+      void message.warning("当前训练样本缺少有效 OpenPose 人体范围，无法保存策略");
       return;
     }
     const filtered = filterModels(models);
@@ -246,12 +279,12 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
       status: "incomplete",
       note: `样本不足：当前仅 ${trainSamples.length} 组训练样本。可以用于预览效果，但建议补足至少 5 组后再作为正式预设。`
     });
-    setTrainingMessage(`已保存为残缺策略：使用 ${usable.length}/${trainSamples.length} 组训练样本。`);
+    void message.success(`已保存为残缺策略：使用 ${usable.length}/${trainSamples.length} 组训练样本`);
   };
 
   const trainPreset = () => {
     if (trainSamples.length < 5) {
-      setTrainingMessage("至少需要确认 5 组训练样本。");
+      void message.warning("至少需要确认 5 组训练样本");
       return;
     }
     const models = makeTrainingModels(trainSamples);
@@ -269,17 +302,23 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
       testRows: makeTestDiagnostics(testSamples, filtered.kept)
     });
     if (filtered.kept.length < 5) {
-      setTrainingMessage(
-        `过滤偏差后不足 5 组：训练样本 ${trainSamples.length} 组，保留 ${filtered.kept.length} 组，过滤 ${trainSamples.length - filtered.kept.length} 组。`
+      void message.warning(
+        `过滤偏差后不足 5 组：训练 ${trainSamples.length} 组，保留 ${filtered.kept.length} 组，过滤 ${
+          trainSamples.length - filtered.kept.length
+        } 组`
       );
       return;
     }
     savePresetComposition(filtered.kept, {
       status: "ready",
-      note: `训练完成：使用 ${filtered.kept.length}/${trainSamples.length} 组训练样本，过滤 ${trainSamples.length - filtered.kept.length} 组偏差样本。`
+      note: `训练完成：使用 ${filtered.kept.length}/${trainSamples.length} 组训练样本，过滤 ${
+        trainSamples.length - filtered.kept.length
+      } 组偏差样本。`
     });
-    setTrainingMessage(
-      `已生成构图策略：训练使用 ${filtered.kept.length}/${trainSamples.length} 组，过滤 ${trainSamples.length - filtered.kept.length} 组偏差样本，测试集 ${testSamples.length} 组。`
+    void message.success(
+      `已生成构图策略：训练 ${filtered.kept.length}/${trainSamples.length}，过滤 ${
+        trainSamples.length - filtered.kept.length
+      } 组偏差样本，测试集 ${testSamples.length} 组`
     );
   };
 
@@ -307,338 +346,348 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
       ? Array.from(new Set([...activeViewAngles, viewAngle]))
       : activeViewAngles.filter((item) => item !== viewAngle);
     if (nextAngles.length === 0) return;
-
     onUpdate(preset.id, {
       viewAngles: nextAngles,
       orientation: nextAngles.includes(preset.orientation ?? "front") ? preset.orientation : nextAngles[0]
     });
   };
 
+  const tagOptions = Array.from(new Set([...allTags, ...preset.tags])).map((tag) => ({
+    value: tag,
+    label: tag
+  }));
+
+  const currentStatus = STATUS_META[preset.status ?? "draft"];
+
   return (
-    <section className="editor-page">
-      <div className="page-header">
-        <Button type="button" variant="secondary" className="back-button" onClick={onBack}>
-          <ChevronLeft size={17} />
-          <span>返回</span>
-        </Button>
-        <div>
-          <h2>{preset.name}</h2>
-          <p>编辑元数据、裁切参数和训练策略</p>
+    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      <Card size="small">
+        <div className="flex items-center justify-between gap-3">
+          <Space>
+            <Button icon={<ArrowLeftOutlined />} onClick={onBack}>返回</Button>
+            <div className="flex flex-col">
+              <Title level={4} style={{ margin: 0 }}>{preset.name}</Title>
+              <Text type="secondary" style={{ fontSize: 12 }}>编辑元数据、裁切参数和训练策略</Text>
+            </div>
+          </Space>
+          <Tag color={currentStatus.color}>{currentStatus.label}</Tag>
         </div>
-      </div>
-      <div className="editor-grid">
-        <section className="editor-card">
-          <h2>基础信息</h2>
-          <div className="form-field">
-            <Label htmlFor={`preset-name-${preset.id}`}>名称</Label>
-            <Input
-              id={`preset-name-${preset.id}`}
-              value={preset.name}
-              onChange={(event) => onUpdate(preset.id, { name: event.target.value })}
-            />
-          </div>
-          <TagManager
-            tags={preset.tags}
-            allTags={allTags}
-            onChange={(tags) => onUpdate(preset.id, { tags })}
-          />
-          <div className="form-field">
-            <Label htmlFor={`preset-note-${preset.id}`}>状态说明</Label>
-            <Textarea
-              id={`preset-note-${preset.id}`}
-              value={preset.note ?? ""}
-              placeholder="这里会记录样本不足、训练完成等状态说明"
-              onChange={(event) => onUpdate(preset.id, { note: event.target.value })}
-            />
-          </div>
-          <div className="grid-two">
-            <NumberField label="宽" value={preset.width} onChange={(width) => onUpdate(preset.id, { width })} />
-            <NumberField label="高" value={preset.height} onChange={(height) => onUpdate(preset.id, { height })} />
-          </div>
-          <div className="crop-guard-options" aria-label="裁切保护约束">
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={Boolean(preset.protectHead)}
-                onChange={(event) => onUpdate(preset.id, { protectHead: event.target.checked })}
+      </Card>
+
+      <div className="grid gap-3 lg:grid-cols-[380px_minmax(0,1fr)]">
+        <Card size="small" title="基础信息">
+          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+            <div className="flex flex-col gap-1">
+              <Text type="secondary" style={{ fontSize: 12 }}>名称</Text>
+              <Input
+                value={preset.name}
+                onChange={(event) => onUpdate(preset.id, { name: event.target.value })}
               />
-              <span>不裁头</span>
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={Boolean(preset.protectHands)}
-                onChange={(event) => onUpdate(preset.id, { protectHands: event.target.checked })}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Text type="secondary" style={{ fontSize: 12 }}>标签</Text>
+              <Select
+                mode="tags"
+                value={preset.tags}
+                placeholder="输入或选择标签"
+                options={tagOptions}
+                onChange={(tags) => onUpdate(preset.id, { tags: normalizeTags(tags) })}
+                maxTagCount={8}
               />
-              <span>不裁手</span>
-            </label>
-          </div>
-          <div className="field-group">
-            <span>适用视角</span>
-            <div className="crop-guard-options" aria-label="适用视角">
-              {viewAngles.map((viewAngle) => (
-                <label className="checkbox-row" key={viewAngle}>
-                  <input
-                    type="checkbox"
+              <Text type="secondary" style={{ fontSize: 10 }}>
+                小写字母/数字/连字符/下划线，最多 8 个
+              </Text>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Text type="secondary" style={{ fontSize: 12 }}>状态说明</Text>
+              <TextArea
+                rows={3}
+                value={preset.note ?? ""}
+                placeholder="样本不足、训练完成等状态说明"
+                onChange={(event) => onUpdate(preset.id, { note: event.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <NumberField
+                label="宽"
+                value={preset.width}
+                onChange={(width) => onUpdate(preset.id, { width })}
+              />
+              <NumberField
+                label="高"
+                value={preset.height}
+                onChange={(height) => onUpdate(preset.id, { height })}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Text type="secondary" style={{ fontSize: 12 }}>裁切保护</Text>
+              <Space>
+                <Checkbox
+                  checked={Boolean(preset.protectHead)}
+                  onChange={(event) => onUpdate(preset.id, { protectHead: event.target.checked })}
+                >
+                  不裁头
+                </Checkbox>
+                <Checkbox
+                  checked={Boolean(preset.protectHands)}
+                  onChange={(event) => onUpdate(preset.id, { protectHands: event.target.checked })}
+                >
+                  不裁手
+                </Checkbox>
+              </Space>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Text type="secondary" style={{ fontSize: 12 }}>适用视角</Text>
+              <Space>
+                {viewAngles.map((viewAngle) => (
+                  <Checkbox
+                    key={viewAngle}
                     checked={activeViewAngles.includes(viewAngle)}
                     onChange={(event) => toggleViewAngle(viewAngle, event.target.checked)}
-                  />
-                  <span>{viewAngleLabels[viewAngle]}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className={`preset-status ${preset.status ?? "draft"}`}>
-            {preset.status === "ready"
-              ? "正式策略"
-              : preset.status === "incomplete"
-                ? "残缺策略"
-                : preset.status === "archived"
-                  ? "已停用"
-                  : "草稿"}
-          </div>
-        </section>
-
-        <section className="editor-card training-editor">
-          <div className="section-header">
-            <div>
-              <h2>训练</h2>
-              <p>上传原图并手动画裁切框，最少 5 组</p>
-            </div>
-            <Button type="button" className="upload-samples-button" onClick={() => trainingInputRef.current?.click()}>
-              <ImageUp size={17} />
-              <span>上传样本</span>
-            </Button>
-          </div>
-          <input
-            ref={trainingInputRef}
-            hidden
-            multiple
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) => {
-              void loadTrainingSamples(event.target.files);
-              event.currentTarget.value = "";
-            }}
-          />
-          <div className="training-meta">
-            <div className="sample-count">{trainSamples.length}/5 训练样本</div>
-            <Button
-              className="reanalyze-samples-button"
-              type="button"
-              onClick={reanalyzeUnknownSamples}
-              disabled={samples.length === 0 || isAnalyzing}
-            >
-              <RefreshCw size={17} />
-              <span>重新识别未知样本</span>
-            </Button>
-            <Button className="save-incomplete-button" type="button" onClick={saveIncompletePreset} disabled={trainSamples.length === 0 || isAnalyzing}>
-              <Save size={17} />
-              <span>保存残缺策略</span>
-            </Button>
-            <Button
-              className={`calibrate-button ${trainSamples.length >= 5 ? "ready" : ""}`}
-              type="button"
-              onClick={trainPreset}
-              disabled={trainSamples.length < 5 || isAnalyzing}
-            >
-              <Wand2 size={17} />
-              <span>{isAnalyzing ? "识别中" : "确认开始训练构图策略"}</span>
-            </Button>
-          </div>
-          {trainingMessage && <p className="calibration-message">{trainingMessage}</p>}
-          <div className="training-workspace">
-            <div className="sample-list-panel">
-              <div className="sample-list-header">
-                <strong>样本列表</strong>
-                <span>{samples.length} 张</span>
-              </div>
-              <div className="sample-list">
-                {samples.map((sample) => (
-                  <button
-                    key={sample.id}
-                    type="button"
-                    className={selectedSample?.id === sample.id ? "active" : ""}
-                    onClick={() => setSelectedSampleId(sample.id)}
                   >
-                    <img src={sample.previewUrl} alt={sample.filename} />
-                    <span>
-                      <strong>{sample.filename}</strong>
-                      <small className={sample.confirmed ? "confirmed" : sample.cropPreviewUrl ? "previewed" : ""}>
-                        {sample.confirmed ? `已确认 · ${sample.set === "train" ? "训练" : "测试"}` : sample.cropPreviewUrl ? "已预览，待确认" : "待处理"} · {viewAngleLabels[sample.viewAngle ?? "front"]} · {providerLabel(sample.poseProvider)}
-                      </small>
-                    </span>
-                  </button>
+                    {viewAngleLabels[viewAngle]}
+                  </Checkbox>
                 ))}
-                {samples.length === 0 && <div className="empty-state compact">上传样本后从这里选择图片</div>}
+              </Space>
+            </div>
+          </Space>
+        </Card>
+
+        <Card
+          size="small"
+          title={
+            <div className="flex flex-col gap-0.5">
+              <Title level={5} style={{ margin: 0 }}>训练</Title>
+              <Text type="secondary" style={{ fontSize: 12 }}>上传原图并手动画裁切框，最少 5 组</Text>
+            </div>
+          }
+          extra={
+            <Upload
+              multiple
+              accept="image/png,image/jpeg,image/webp"
+              showUploadList={false}
+              beforeUpload={(_file, allFiles) => {
+                void loadTrainingSamples(allFiles);
+                return false;
+              }}
+            >
+              <Button type="primary" icon={<UploadOutlined />}>上传样本</Button>
+            </Upload>
+          }
+        >
+          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e6ebe6] bg-[#fafbfa] p-3">
+              <Space size={12}>
+                <Badge count={`${trainSamples.length}/5`} showZero color={trainSamples.length >= 5 ? "#1c6b62" : "#fa8c16"}>
+                  <Text strong>训练样本</Text>
+                </Badge>
+                <Text type="secondary" style={{ fontSize: 12 }}>测试集 {testSamples.length} 组</Text>
+              </Space>
+              <Space wrap>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={isAnalyzing}
+                  disabled={samples.length === 0 || isAnalyzing}
+                  onClick={reanalyzeUnknownSamples}
+                >
+                  重新识别未知
+                </Button>
+                <Button
+                  size="small"
+                  icon={<SaveOutlined />}
+                  disabled={trainSamples.length === 0 || isAnalyzing}
+                  onClick={saveIncompletePreset}
+                >
+                  保存残缺策略
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<ThunderboltOutlined />}
+                  loading={isAnalyzing}
+                  disabled={trainSamples.length < 5 || isAnalyzing}
+                  onClick={trainPreset}
+                >
+                  {isAnalyzing ? "识别中" : "开始训练"}
+                </Button>
+              </Space>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
+              <Card
+                size="small"
+                type="inner"
+                title="样本列表"
+                extra={<Text type="secondary" style={{ fontSize: 11 }}>{samples.length} 张</Text>}
+                styles={{ body: { padding: 0, maxHeight: 520, overflow: "auto" } }}
+              >
+                {samples.length === 0 ? (
+                  <div className="p-3">
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="上传样本后从这里选择" />
+                  </div>
+                ) : (
+                  samples.map((sample) => (
+                    <button
+                      key={sample.id}
+                      type="button"
+                      onClick={() => setSelectedSampleId(sample.id)}
+                      className={`flex w-full items-center gap-2 border-b border-[#f0f1ed] px-2 py-2 text-left text-xs last:border-b-0 ${
+                        selectedSample?.id === sample.id ? "bg-[#e3efed]" : "hover:bg-[#f7f8f5]"
+                      }`}
+                    >
+                      <img src={sample.previewUrl} alt={sample.filename} className="h-10 w-10 rounded object-cover" />
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <Text strong style={{ fontSize: 11 }} ellipsis>{sample.filename}</Text>
+                        <Space size={4}>
+                          <Tag
+                            color={sample.confirmed ? "green" : sample.cropPreviewUrl ? "blue" : "default"}
+                            style={{ marginInlineEnd: 0, fontSize: 10 }}
+                          >
+                            {sample.confirmed
+                              ? `已确认 · ${sample.set === "train" ? "训练" : "测试"}`
+                              : sample.cropPreviewUrl
+                                ? "已预览"
+                                : "待处理"}
+                          </Tag>
+                          <Text type="secondary" style={{ fontSize: 10 }}>
+                            {viewAngleLabels[sample.viewAngle ?? "front"]} · {providerLabel(sample.poseProvider)}
+                          </Text>
+                        </Space>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </Card>
+
+              <div>
+                {selectedSample ? (
+                  <TrainingCard
+                    key={selectedSample.id}
+                    aspectRatio={preset.width / preset.height}
+                    sample={selectedSample}
+                    onConfirm={confirmSample}
+                    onPreview={previewSample}
+                    onUpdate={updateSample}
+                  />
+                ) : (
+                  <Card size="small">
+                    <Empty description="上传样本后开始裁切" />
+                  </Card>
+                )}
               </div>
             </div>
-            <div className="sample-editor-panel">
-              {selectedSample ? (
-                <TrainingCard
-                  key={selectedSample.id}
-                  aspectRatio={preset.width / preset.height}
-                  sample={selectedSample}
-                  onConfirm={confirmSample}
-                  onPreview={previewSample}
-                  onUpdate={updateSample}
-                />
-              ) : (
-                <div className="empty-state">上传样本后开始裁切</div>
-              )}
-            </div>
-          </div>
-          {diagnostics && <TrainingDiagnosticsPanel diagnostics={diagnostics} />}
-        </section>
+
+            {diagnostics && <TrainingDiagnosticsPanel diagnostics={diagnostics} />}
+          </Space>
+        </Card>
       </div>
-    </section>
-  );
-}
-
-function TagManager({
-  tags,
-  allTags,
-  onChange
-}: {
-  tags: string[];
-  allTags: string[];
-  onChange: (tags: string[]) => void;
-}) {
-  const [draftTag, setDraftTag] = useState("");
-  const [tagError, setTagError] = useState("");
-  const normalizedTags = normalizeTags(tags);
-  const availableTags = allTags.filter((tag) => !normalizedTags.includes(tag));
-
-  const addTag = (value: string) => {
-    const nextTag = normalizeTag(value);
-    const error = validateTag(nextTag, normalizedTags);
-    if (error) {
-      setTagError(error);
-      return;
-    }
-    onChange([...normalizedTags, nextTag]);
-    setDraftTag("");
-    setTagError("");
-  };
-
-  const removeTag = (tag: string) => {
-    onChange(normalizedTags.filter((item) => item !== tag));
-    setTagError("");
-  };
-
-  return (
-    <div className="tag-manager">
-      <div className="field-group">
-        <span>标签</span>
-        <div className="managed-tags" aria-label="当前标签">
-          {normalizedTags.map((tag) => (
-            <Button key={tag} type="button" variant="secondary" className="managed-tag" onClick={() => removeTag(tag)} title={`移除 ${tag}`}>
-              <span>{tag}</span>
-              <X size={14} />
-            </Button>
-          ))}
-          {normalizedTags.length === 0 && <span className="empty-tags">尚未添加标签</span>}
-        </div>
-      </div>
-      <div className="tag-add-row">
-        <Input
-          value={draftTag}
-          placeholder="portrait"
-          aria-label="新增标签"
-          onChange={(event) => {
-            setDraftTag(event.target.value);
-            setTagError("");
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              addTag(draftTag);
-            }
-          }}
-        />
-        <Button type="button" className="add-tag-button" onClick={() => addTag(draftTag)}>
-          <Plus size={16} />
-          <span>添加</span>
-        </Button>
-      </div>
-      {tagError && <p className="tag-error">{tagError}</p>}
-      {availableTags.length > 0 && (
-        <div className="tag-suggestions">
-          <span>已有标签</span>
-          <div className="tag-filter">
-            {availableTags.map((tag) => (
-              <Button key={tag} type="button" variant="outline" className="ghost-chip" onClick={() => addTag(tag)}>
-                {tag}
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </Space>
   );
 }
 
 function TrainingDiagnosticsPanel({ diagnostics }: { diagnostics: TrainingDiagnostics }) {
   const rejected = diagnostics.rows.filter((row) => !row.kept).length;
+  const trainColumns: ColumnsType<TrainingDiagnostics["rows"][number]> = [
+    { title: "样本", dataIndex: "filename", key: "filename", ellipsis: true },
+    {
+      title: "状态",
+      dataIndex: "kept",
+      key: "kept",
+      width: 100,
+      render: (kept: boolean) => (kept ? <Tag color="green">保留</Tag> : <Tag color="red">偏差过大</Tag>)
+    },
+    {
+      title: "偏差",
+      dataIndex: "distance",
+      key: "distance",
+      width: 90,
+      render: (distance: number) => formatMetric(distance)
+    },
+    {
+      title: "构图数据",
+      dataIndex: "model",
+      key: "model",
+      render: (model: ModelWithSample) => formatModelSummary(model)
+    }
+  ];
+
+  const testColumns: ColumnsType<TrainingDiagnostics["testRows"][number]> = [
+    { title: "测试样本", dataIndex: "filename", key: "filename", ellipsis: true },
+    {
+      title: "IoU",
+      dataIndex: "iou",
+      key: "iou",
+      width: 90,
+      render: (iou: number) => formatMetric(iou)
+    },
+    {
+      title: "中心误差",
+      dataIndex: "centerError",
+      key: "centerError",
+      width: 110,
+      render: (value: number) => formatMetric(value)
+    },
+    {
+      title: "说明",
+      dataIndex: "iou",
+      key: "summary",
+      render: (iou: number) =>
+        iou >= 0.7 ? <Tag color="green">接近人工裁切</Tag> : <Tag color="gold">差异较大</Tag>
+    }
+  ];
+
   return (
-    <section className="diagnostics-panel">
-      <div className="sample-list-header">
-        <strong>偏差诊断</strong>
-        <span>阈值 {formatMetric(diagnostics.threshold)} · 过滤 {rejected} 组</span>
-      </div>
-      {diagnostics.center && (
-        <div className="diagnostic-center">
-          {diagnostics.center.mode === "pose_semantic" ? (
-            <>
-              <span>上边界 {semanticAnchorLabel(diagnostics.center.topAnchor)}</span>
-              <span>下边界 {semanticAnchorLabel(diagnostics.center.bottomAnchor)}</span>
-              <span>中心 {formatCenterPolicy(diagnostics.center.centerOffset ?? 0)}</span>
-            </>
-          ) : (
-            <>
-              <span>L {formatMetric(diagnostics.center.left)}</span>
-              <span>T {formatMetric(diagnostics.center.top)}</span>
-              <span>W {formatMetric(diagnostics.center.width)}</span>
-              <span>H {formatMetric(diagnostics.center.height)}</span>
-            </>
-          )}
-        </div>
-      )}
-      <div className="diagnostic-table">
-        <div className="diagnostic-row head">
-          <span>样本</span>
-          <span>状态</span>
-          <span>偏差</span>
-          <span>构图数据</span>
-        </div>
-        {diagnostics.rows.map((row) => (
-          <div className={`diagnostic-row ${row.kept ? "" : "rejected"}`} key={row.sampleId}>
-            <span>{row.filename}</span>
-            <span>{row.kept ? "保留" : "偏差过大"}</span>
-            <span>{formatMetric(row.distance)}</span>
-            <span>{formatModelSummary(row.model)}</span>
-          </div>
-        ))}
-      </div>
-      {diagnostics.testRows.length > 0 && (
-        <div className="diagnostic-table">
-          <div className="diagnostic-row head">
-            <span>测试样本</span>
-            <span>IoU</span>
-            <span>中心误差</span>
-            <span>说明</span>
-          </div>
-          {diagnostics.testRows.map((row) => (
-            <div className="diagnostic-row" key={row.sampleId}>
-              <span>{row.filename}</span>
-              <span>{formatMetric(row.iou)}</span>
-              <span>{formatMetric(row.centerError)}</span>
-              <span>{row.iou >= 0.7 ? "接近人工裁切" : "和人工裁切差异较大"}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+    <Card size="small" type="inner" title="偏差诊断" extra={<Text type="secondary" style={{ fontSize: 12 }}>阈值 {formatMetric(diagnostics.threshold)} · 过滤 {rejected} 组</Text>}>
+      <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+        {diagnostics.center && (
+          <Alert
+            type="info"
+            showIcon
+            message="中心构图"
+            description={
+              diagnostics.center.mode === "pose_semantic" ? (
+                <Space size={8} wrap>
+                  <Tag>上 {semanticAnchorLabel(diagnostics.center.topAnchor)}</Tag>
+                  <Tag>下 {semanticAnchorLabel(diagnostics.center.bottomAnchor)}</Tag>
+                  <Tag>中心 {formatCenterPolicy(diagnostics.center.centerOffset ?? 0)}</Tag>
+                </Space>
+              ) : (
+                <Space size={8} wrap>
+                  <Tag>L {formatMetric(diagnostics.center.left)}</Tag>
+                  <Tag>T {formatMetric(diagnostics.center.top)}</Tag>
+                  <Tag>W {formatMetric(diagnostics.center.width)}</Tag>
+                  <Tag>H {formatMetric(diagnostics.center.height)}</Tag>
+                </Space>
+              )
+            }
+          />
+        )}
+        <Table
+          rowKey="sampleId"
+          size="small"
+          columns={trainColumns}
+          dataSource={diagnostics.rows}
+          pagination={false}
+          scroll={{ y: 320 }}
+        />
+        {diagnostics.testRows.length > 0 && (
+          <Table
+            rowKey="sampleId"
+            size="small"
+            columns={testColumns}
+            dataSource={diagnostics.testRows}
+            pagination={false}
+            scroll={{ y: 320 }}
+          />
+        )}
+      </Space>
+    </Card>
   );
 }
 
@@ -763,26 +812,22 @@ function renderCropPreview(sample: TrainingSample) {
   });
 }
 
-function providerLabel(provider: TrainingSample["poseProvider"]) {
+function providerLabel(provider: TrainingSample["poseProvider"] | string) {
   if (provider === "rtmw") return "RTMW-l";
   if (provider === "heuristic") return "旧方案";
   return "未知来源";
 }
 
-function normalizeTag(value: string) {
-  return value.trim().toLowerCase();
-}
-
 function normalizeTags(tags: string[]) {
-  return Array.from(new Set(tags.map(normalizeTag).filter(Boolean)));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of tags) {
+    const tag = raw.trim().toLowerCase();
+    if (!tag || seen.has(tag)) continue;
+    if (!/^[a-z0-9][a-z0-9_-]{0,23}$/.test(tag)) continue;
+    seen.add(tag);
+    result.push(tag);
+    if (result.length >= 8) break;
+  }
+  return result;
 }
-
-function validateTag(tag: string, existingTags: string[]) {
-  if (!tag) return "请输入标签。";
-  if (!tagPattern.test(tag)) return "标签只能使用小写字母、数字、连字符或下划线，并以字母或数字开头，最多 24 个字符。";
-  if (existingTags.includes(tag)) return "这个标签已经存在。";
-  if (existingTags.length >= maxTagsPerPreset) return `单个预设最多 ${maxTagsPerPreset} 个标签。`;
-  return "";
-}
-
-const viewAngles: ViewAngle[] = ["front", "side", "back"];

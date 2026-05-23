@@ -1,8 +1,21 @@
-import { useState } from "react";
-import { BriefcaseBusiness, Cloud, Eye, Layers3, RefreshCw } from "lucide-react";
-import { Scissors, Workflow } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  ApartmentOutlined,
+  AppstoreOutlined,
+  CloudOutlined,
+  ExperimentOutlined,
+  EyeOutlined,
+  ScissorOutlined,
+  ShopOutlined,
+  SyncOutlined
+} from "@ant-design/icons";
+import { Alert, Button, Layout, Menu, Select, Space, Tag, Typography } from "antd";
+import type { MenuProps } from "antd";
 import type { StorageStatus } from "../api/presets";
 import type { AppView, PoseProviderId } from "../types";
+
+const { Sider } = Layout;
+const { Text } = Typography;
 
 type SidebarProps = {
   view: AppView;
@@ -25,6 +38,107 @@ const STATUS_LABELS: Record<string, string> = {
   unknown: "未知"
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  synced: "green",
+  pending: "gold",
+  unknown: "default"
+};
+
+export function Sidebar({
+  view,
+  error,
+  poseProvider,
+  storageStatus,
+  onNavigate,
+  onPoseProviderChange,
+  onSyncStorage
+}: SidebarProps) {
+  const menuItems = useMemo<MenuProps["items"]>(
+    () => [
+      {
+        key: "workflow",
+        type: "group",
+        label: "工作流",
+        children: [
+          { key: "batchJobs", icon: <ApartmentOutlined />, label: "Pipeline 任务" },
+          { key: "batch", icon: <ScissorOutlined />, label: "单批次试跑" }
+        ]
+      },
+      {
+        key: "config",
+        type: "group",
+        label: "配置模块",
+        children: [
+          { key: "sceneList", icon: <ShopOutlined />, label: "场景 / 品牌" },
+          { key: "presetList", icon: <AppstoreOutlined />, label: "裁切预设" }
+        ]
+      },
+      {
+        key: "diagnostics",
+        type: "group",
+        label: "诊断工具",
+        children: [{ key: "viewTest", icon: <EyeOutlined />, label: "视角测试" }]
+      }
+    ],
+    []
+  );
+
+  const selectedKey = view === "presetEditor" ? "presetList" : view;
+
+  return (
+    <Sider
+      width={240}
+      theme="light"
+      className="!border-r !border-[#e6ebe6] !bg-white"
+      style={{ minHeight: "100vh", position: "sticky", top: 0, overflow: "auto", height: "100vh" }}
+    >
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-3 border-b border-[#eef1ee] px-4 py-4">
+          <div className="grid h-10 w-10 place-items-center rounded-md bg-[#1c6b62] font-bold text-white">
+            OP
+          </div>
+          <div className="flex flex-col leading-tight">
+            <Text strong style={{ fontSize: 15 }}>Crop Pipeline</Text>
+            <Text type="secondary" style={{ fontSize: 11 }}>Python 工作流 · React 控制台</Text>
+            <Text type="secondary" className="!font-mono" style={{ fontSize: 10 }}>
+              {__APP_VERSION__} · {__APP_COMMIT__}
+            </Text>
+          </div>
+        </div>
+
+        <Menu
+          mode="inline"
+          selectedKeys={[selectedKey]}
+          items={menuItems}
+          onClick={({ key }) => onNavigate(key as AppView)}
+          style={{ borderInlineEnd: "none", flex: 1 }}
+        />
+
+        <div className="flex flex-col gap-3 border-t border-[#eef1ee] px-3 py-3">
+          {storageStatus?.cloudSync && (
+            <StorageStatusPanel storageStatus={storageStatus} onSyncStorage={onSyncStorage} />
+          )}
+
+          <div className="flex flex-col gap-1">
+            <Text type="secondary" style={{ fontSize: 11 }}>姿态引擎</Text>
+            <Select
+              value={poseProvider}
+              size="small"
+              onChange={(value) => onPoseProviderChange(value)}
+              options={[
+                { value: "rtmw", label: "RTMW-l ONNX" },
+                { value: "heuristic", label: "旧方案 / Heuristic" }
+              ]}
+            />
+          </div>
+
+          {error && <Alert type="error" showIcon message={error} style={{ padding: "4px 8px" }} />}
+        </div>
+      </div>
+    </Sider>
+  );
+}
+
 function StorageStatusPanel({
   storageStatus,
   onSyncStorage
@@ -44,93 +158,32 @@ function StorageStatusPanel({
   };
 
   return (
-    <div className="storage-status">
-      <div className="storage-status-head">
-        <span>
-          <Cloud size={13} /> 云端同步
-        </span>
-        <button type="button" onClick={() => void handleSync()} disabled={syncing}>
-          <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
+    <div className="rounded-md border border-[#e6ebe6] bg-[#fafbfa] p-2">
+      <div className="mb-1 flex items-center justify-between">
+        <Space size={4}>
+          <CloudOutlined style={{ color: "#1c6b62" }} />
+          <Text strong style={{ fontSize: 12 }}>云端同步</Text>
+        </Space>
+        <Button
+          size="small"
+          type="text"
+          icon={<SyncOutlined spin={syncing} />}
+          onClick={() => void handleSync()}
+          disabled={syncing}
+        >
           {syncing ? "同步中" : "立即同步"}
-        </button>
+        </Button>
       </div>
-      {Object.entries(storageStatus.collections).map(([name, info]) => (
-        <div key={name} className={`storage-row ${info.status}`} title={info.lastError ?? ""}>
-          <span>{COLLECTION_LABELS[name] ?? name}</span>
-          <span className="storage-badge">{STATUS_LABELS[info.status] ?? info.status}</span>
-        </div>
-      ))}
+      <Space orientation="vertical" size={2} style={{ width: "100%" }}>
+        {Object.entries(storageStatus.collections).map(([name, info]) => (
+          <div key={name} className="flex items-center justify-between" title={info.lastError ?? ""}>
+            <Text type="secondary" style={{ fontSize: 11 }}>{COLLECTION_LABELS[name] ?? name}</Text>
+            <Tag color={STATUS_COLORS[info.status]} style={{ marginInlineEnd: 0, fontSize: 10 }}>
+              {STATUS_LABELS[info.status] ?? info.status}
+            </Tag>
+          </div>
+        ))}
+      </Space>
     </div>
-  );
-}
-
-export function Sidebar({
-  view,
-  error,
-  poseProvider,
-  storageStatus,
-  onNavigate,
-  onPoseProviderChange,
-  onSyncStorage
-}: SidebarProps) {
-  return (
-    <aside className="app-sidebar">
-      <div className="brand">
-        <span className="mark">OP</span>
-        <div>
-          <h1>Crop Pipeline</h1>
-          <p>Python 工作流 · React 控制台</p>
-          <p className="app-version">
-            {__APP_VERSION__} · {__APP_COMMIT__}
-          </p>
-        </div>
-      </div>
-      <nav className="side-nav" aria-label="Views">
-        <div className="side-nav-section">
-          <span className="side-nav-title">工作流</span>
-          <button className={view === "batchJobs" ? "active" : ""} onClick={() => onNavigate("batchJobs")}>
-            <Workflow size={17} />
-            <span>Pipeline 任务</span>
-          </button>
-          <button className={view === "batch" ? "active" : ""} onClick={() => onNavigate("batch")}>
-            <Scissors size={17} />
-            <span>单批次试跑</span>
-          </button>
-        </div>
-
-        <div className="side-nav-section">
-          <span className="side-nav-title">配置模块</span>
-          <button className={view === "sceneList" ? "active" : ""} onClick={() => onNavigate("sceneList")}>
-            <BriefcaseBusiness size={17} />
-            <span>场景 / 品牌</span>
-          </button>
-          <button className={view === "presetList" || view === "presetEditor" ? "active" : ""} onClick={() => onNavigate("presetList")}>
-            <Layers3 size={17} />
-            <span>裁切预设</span>
-          </button>
-        </div>
-
-        <div className="side-nav-section">
-          <span className="side-nav-title">诊断工具</span>
-          <button className={view === "viewTest" ? "active" : ""} onClick={() => onNavigate("viewTest")}>
-            <Eye size={17} />
-            <span>视角测试</span>
-          </button>
-        </div>
-      </nav>
-
-      {storageStatus?.cloudSync && (
-        <StorageStatusPanel storageStatus={storageStatus} onSyncStorage={onSyncStorage} />
-      )}
-
-      <label className="provider-select">
-        姿态引擎
-        <select value={poseProvider} onChange={(event) => onPoseProviderChange(event.target.value as PoseProviderId)}>
-          <option value="rtmw">RTMW-l ONNX</option>
-          <option value="heuristic">旧方案 / Heuristic</option>
-        </select>
-      </label>
-      {error && <p className="error">{error}</p>}
-    </aside>
   );
 }

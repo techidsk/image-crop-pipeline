@@ -1,19 +1,36 @@
 import { useRef, useState } from "react";
-import { Archive, ArchiveRestore, Copy, FlaskConical, ImageUp, Pencil, Plus, Play, X } from "lucide-react";
+import {
+  CopyOutlined,
+  EditOutlined,
+  ExperimentOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  StopOutlined,
+  UploadOutlined
+} from "@ant-design/icons";
+import { App, Button, Card, Drawer, Empty, Image, Segmented, Space, Table, Tag, Typography, Upload } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import type { UploadFile } from "antd/es/upload/interface";
 import { viewAngleLabels } from "../constants";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import type { CropPreset, PoseProviderId, PresetStatus, ProcessResponse } from "../types";
 
-const STATUS_META: Record<PresetStatus, { label: string; badge: string }> = {
-  draft: { label: "草稿", badge: "border-slate-200 bg-slate-100 text-slate-600" },
-  incomplete: { label: "残缺策略", badge: "border-amber-200 bg-amber-50 text-amber-700" },
-  ready: { label: "正式策略", badge: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  archived: { label: "已停用", badge: "border-rose-200 bg-rose-50 text-rose-600" }
+const { Title, Text } = Typography;
+
+const STATUS_META: Record<PresetStatus, { label: string; color: string }> = {
+  draft: { label: "草稿", color: "default" },
+  incomplete: { label: "残缺策略", color: "gold" },
+  ready: { label: "正式策略", color: "green" },
+  archived: { label: "已停用", color: "red" }
 };
 
-const STATUS_FILTERS: PresetStatus[] = ["draft", "incomplete", "ready", "archived"];
+const STATUS_OPTIONS = [
+  { label: "全部", value: "all" },
+  { label: "草稿", value: "draft" },
+  { label: "残缺", value: "incomplete" },
+  { label: "正式", value: "ready" },
+  { label: "已停用", value: "archived" }
+];
 
 type StatusFilter = PresetStatus | "all";
 
@@ -27,222 +44,231 @@ type PresetListPageProps = {
   poseProvider: PoseProviderId;
 };
 
-export function PresetListPage({ allTags, presets, onAdd, onDuplicate, onEdit, onSetStatus, poseProvider }: PresetListPageProps) {
+export function PresetListPage({
+  allTags,
+  presets,
+  onAdd,
+  onDuplicate,
+  onEdit,
+  onSetStatus,
+  poseProvider
+}: PresetListPageProps) {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [testingPreset, setTestingPreset] = useState<CropPreset | null>(null);
+
   const visiblePresets = presets.filter((preset) => {
     const status = preset.status ?? "draft";
     if (statusFilter !== "all" && status !== statusFilter) return false;
     return activeTags.every((tag) => preset.tags.includes(tag));
   });
 
-  return (
-    <section className="flex min-h-[calc(100vh-32px)] flex-col gap-4 rounded-lg border border-line bg-paper p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold text-ink">预设管理</h2>
-          <p className="text-xs text-muted">筛选、测试和进入单个预设编辑</p>
-        </div>
-        <Button type="button" onClick={onAdd}>
-          <Plus />
-          <span>新建预设</span>
-        </Button>
-      </div>
+  const toggleTag = (tag: string) => {
+    setActiveTags((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+    );
+  };
 
-      <div className="flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-muted">状态</span>
-          <Button
-            type="button"
-            size="sm"
-            variant={statusFilter === "all" ? "default" : "outline"}
-            onClick={() => setStatusFilter("all")}
-          >
-            全部
-          </Button>
-          {STATUS_FILTERS.map((status) => (
-            <Button
-              key={status}
-              type="button"
-              size="sm"
-              variant={statusFilter === status ? "default" : "outline"}
-              onClick={() => setStatusFilter(status)}
-            >
-              {STATUS_META[status].label}
-            </Button>
+  const columns: ColumnsType<CropPreset> = [
+    {
+      title: "预设",
+      dataIndex: "name",
+      key: "name",
+      render: (_, preset) => (
+        <div className="flex flex-col">
+          <Text strong>{preset.name}</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>{preset.id}</Text>
+        </div>
+      )
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 100,
+      render: (_, preset) => {
+        const status = preset.status ?? "draft";
+        return <Tag color={STATUS_META[status].color}>{STATUS_META[status].label}</Tag>;
+      }
+    },
+    {
+      title: "适用视角",
+      key: "viewAngles",
+      width: 140,
+      render: (_, preset) => <Tag color="cyan">{viewAngleText(preset)}</Tag>
+    },
+    {
+      title: "输出尺寸",
+      key: "size",
+      width: 110,
+      render: (_, preset) => `${preset.width}x${preset.height}`
+    },
+    {
+      title: "标签",
+      dataIndex: "tags",
+      key: "tags",
+      render: (_, preset) => (
+        <Space size={4} wrap>
+          {preset.tags.map((tag) => (
+            <Tag key={tag}>{tag}</Tag>
           ))}
-        </div>
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted">标签</span>
-            {allTags.map((tag) => (
+        </Space>
+      )
+    },
+    {
+      title: "说明",
+      dataIndex: "note",
+      key: "note",
+      ellipsis: true,
+      render: (note) => (
+        <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+          {note || "无说明"}
+        </Text>
+      )
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 180,
+      align: "right",
+      render: (_, preset) => {
+        const archived = (preset.status ?? "draft") === "archived";
+        return (
+          <Space size={2}>
+            <Button
+              size="small"
+              type="text"
+              icon={<ExperimentOutlined />}
+              title="测试"
+              onClick={() => setTestingPreset(preset)}
+            />
+            <Button
+              size="small"
+              type="text"
+              icon={<EditOutlined />}
+              title="编辑"
+              onClick={() => onEdit(preset.id)}
+            />
+            <Button
+              size="small"
+              type="text"
+              icon={<CopyOutlined />}
+              title="复制"
+              onClick={() => onDuplicate(preset)}
+            />
+            {archived ? (
               <Button
-                key={tag}
-                type="button"
-                size="sm"
-                variant={activeTags.includes(tag) ? "default" : "outline"}
-                onClick={() =>
-                  setActiveTags((current) =>
-                    current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
-                  )
-                }
-              >
-                {tag}
-              </Button>
-            ))}
+                size="small"
+                type="text"
+                icon={<ReloadOutlined />}
+                title="恢复为草稿"
+                onClick={() => onSetStatus(preset.id, "draft")}
+              />
+            ) : (
+              <Button
+                size="small"
+                type="text"
+                danger
+                icon={<StopOutlined />}
+                title="停用"
+                onClick={() => onSetStatus(preset.id, "archived")}
+              />
+            )}
+          </Space>
+        );
+      }
+    }
+  ];
+
+  return (
+    <>
+      <Card
+        title={
+          <div className="flex flex-col gap-0.5">
+            <Title level={5} style={{ margin: 0 }}>预设管理</Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>筛选、测试和进入单个预设编辑</Text>
           </div>
-        )}
-      </div>
-
-      <div className="overflow-x-auto rounded-lg border border-line">
-        <table className="w-full min-w-[900px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-[#f4f7f9] text-xs font-bold text-[#52606f]">
-              <th className="px-3.5 py-3 text-left">预设</th>
-              <th className="px-3.5 py-3 text-left">状态</th>
-              <th className="px-3.5 py-3 text-left">适用视角</th>
-              <th className="px-3.5 py-3 text-left">输出尺寸</th>
-              <th className="px-3.5 py-3 text-left">标签</th>
-              <th className="px-3.5 py-3 text-left">说明</th>
-              <th className="px-3.5 py-3 text-right">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visiblePresets.map((preset) => {
-              const status = preset.status ?? "draft";
-              const archived = status === "archived";
-              return (
-                <tr
-                  key={preset.id}
-                  className={cn("border-t border-[#edf0f3] text-[13px] text-[#3a4654]", archived && "opacity-55")}
+        }
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
+            新建预设
+          </Button>
+        }
+      >
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+          <Space size={8} wrap>
+            <Text type="secondary" style={{ fontSize: 12 }}>状态</Text>
+            <Segmented
+              size="small"
+              value={statusFilter}
+              options={STATUS_OPTIONS}
+              onChange={(value) => setStatusFilter(value as StatusFilter)}
+            />
+          </Space>
+          {allTags.length > 0 && (
+            <Space size={4} wrap align="center">
+              <Text type="secondary" style={{ fontSize: 12 }}>标签</Text>
+              {allTags.map((tag) => (
+                <Tag.CheckableTag
+                  key={tag}
+                  checked={activeTags.includes(tag)}
+                  onChange={() => toggleTag(tag)}
                 >
-                  <td className="px-3.5 py-3 align-middle">
-                    <div className="flex flex-col">
-                      <strong className="font-semibold text-ink">{preset.name}</strong>
-                      <span className="text-xs text-muted">{preset.id}</span>
-                    </div>
-                  </td>
-                  <td className="px-3.5 py-3 align-middle">
-                    <Badge variant="outline" className={STATUS_META[status].badge}>
-                      {STATUS_META[status].label}
-                    </Badge>
-                  </td>
-                  <td className="px-3.5 py-3 align-middle">
-                    <Badge variant="outline" className="border-[#d6ded7] bg-[#f2f7f5] text-[#2f5f58]">
-                      {viewAngleText(preset)}
-                    </Badge>
-                  </td>
-                  <td className="px-3.5 py-3 align-middle">
-                    {preset.width}x{preset.height}
-                  </td>
-                  <td className="px-3.5 py-3 align-middle">
-                    <div className="flex flex-wrap gap-1.5">
-                      {preset.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-3.5 py-3 align-middle">
-                    <span className="block max-w-[280px] truncate text-xs text-muted">{preset.note || "无说明"}</span>
-                  </td>
-                  <td className="px-3.5 py-3 align-middle">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title="测试"
-                        onClick={() => setTestingPreset(preset)}
-                      >
-                        <FlaskConical />
-                      </Button>
-                      <Button type="button" size="icon" variant="ghost" title="编辑" onClick={() => onEdit(preset.id)}>
-                        <Pencil />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title="复制"
-                        onClick={() => onDuplicate(preset)}
-                      >
-                        <Copy />
-                      </Button>
-                      {archived ? (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          title="恢复为草稿"
-                          onClick={() => onSetStatus(preset.id, "draft")}
-                        >
-                          <ArchiveRestore />
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          title="停用"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => onSetStatus(preset.id, "archived")}
-                        >
-                          <Archive />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {visiblePresets.length === 0 && (
-          <div className="px-3.5 py-10 text-center text-sm text-muted">没有匹配的预设</div>
-        )}
-      </div>
+                  {tag}
+                </Tag.CheckableTag>
+              ))}
+            </Space>
+          )}
+          <Table
+            rowKey="id"
+            size="small"
+            columns={columns}
+            dataSource={visiblePresets}
+            pagination={{ pageSize: 20, hideOnSinglePage: true, size: "small" }}
+            rowClassName={(preset) => ((preset.status ?? "draft") === "archived" ? "opacity-55" : "")}
+            locale={{ emptyText: <Empty description="没有匹配的预设" /> }}
+          />
+        </Space>
+      </Card>
 
-      {testingPreset && <PresetTestPanel preset={testingPreset} poseProvider={poseProvider} onClose={() => setTestingPreset(null)} />}
-    </section>
+      <Drawer
+        open={Boolean(testingPreset)}
+        onClose={() => setTestingPreset(null)}
+        title={testingPreset ? `测试预设：${testingPreset.name}` : ""}
+        width={720}
+        destroyOnClose
+      >
+        {testingPreset && <PresetTestPanel preset={testingPreset} poseProvider={poseProvider} />}
+      </Drawer>
+    </>
   );
 }
 
-function PresetTestPanel({
-  preset,
-  poseProvider,
-  onClose
-}: {
-  preset: CropPreset;
-  poseProvider: PoseProviderId;
-  onClose: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
+function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; poseProvider: PoseProviderId }) {
+  const { message } = App.useApp();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [result, setResult] = useState<ProcessResponse | null>(null);
   const [compareResults, setCompareResults] = useState<Record<string, ProcessResponse> | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState("");
+  const previewRef = useRef("");
 
-  const chooseFile = (selected: FileList | null) => {
-    const nextFile = selected?.[0] ?? null;
+  const chooseFile = (nextFile: File | null) => {
     setFile(nextFile);
     setResult(null);
-    setError("");
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(nextFile ? URL.createObjectURL(nextFile) : "");
+    setCompareResults(null);
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    const url = nextFile ? URL.createObjectURL(nextFile) : "";
+    previewRef.current = url;
+    setPreviewUrl(url);
   };
 
   const runTest = async () => {
     if (!file) {
-      setError("请先上传测试图片。");
+      void message.warning("请先上传测试图片");
       return;
     }
     setIsProcessing(true);
-    setError("");
     try {
       const formData = new FormData();
       formData.append("image", file);
@@ -256,7 +282,7 @@ function PresetTestPanel({
       setResult((await response.json()) as ProcessResponse);
       setCompareResults(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "测试失败");
+      void message.error(err instanceof Error ? err.message : "测试失败");
     } finally {
       setIsProcessing(false);
     }
@@ -264,11 +290,10 @@ function PresetTestPanel({
 
   const runCompare = async () => {
     if (!file) {
-      setError("请先上传测试图片。");
+      void message.warning("请先上传测试图片");
       return;
     }
     setIsProcessing(true);
-    setError("");
     try {
       const formData = new FormData();
       formData.append("image", file);
@@ -281,87 +306,109 @@ function PresetTestPanel({
       setCompareResults((await response.json()) as Record<string, ProcessResponse>);
       setResult(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "对比失败");
+      void message.error(err instanceof Error ? err.message : "对比失败");
     } finally {
       setIsProcessing(false);
     }
   };
 
+  const uploadProps = {
+    accept: "image/png,image/jpeg,image/webp",
+    maxCount: 1,
+    showUploadList: false,
+    beforeUpload: (f: File) => {
+      chooseFile(f);
+      return false;
+    },
+    onRemove: () => chooseFile(null)
+  };
+
   const crop = result?.crops[0];
 
   return (
-    <section className="preset-test-panel">
-      <div className="page-header">
-        <div>
-          <h2>测试预设：{preset.name}</h2>
-          <p>{preset.width}x{preset.height} · {viewAngleText(preset)} · {statusLabel(preset)}</p>
-        </div>
-        <button type="button" className="back-button" onClick={onClose}>
-          <X size={17} />
-          <span>关闭</span>
-        </button>
-      </div>
-      <div className="preset-test-grid">
-        <div className="test-upload-panel">
-          <button type="button" className="upload-zone" onClick={() => inputRef.current?.click()}>
-            <ImageUp size={20} />
-            <span>{file ? file.name : "上传一张测试图片"}</span>
-          </button>
-          <input
-            ref={inputRef}
-            hidden
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) => chooseFile(event.target.files)}
-          />
-          <button type="button" className="calibrate-button ready" onClick={runTest} disabled={isProcessing}>
-            <Play size={17} />
-            <span>{isProcessing ? "测试中" : `运行测试：${providerLabel(poseProvider)}`}</span>
-          </button>
-          <button type="button" className="preview-crop-button" onClick={runCompare} disabled={isProcessing}>
-            <FlaskConical size={17} />
-            <span>对比两种方案</span>
-          </button>
-          {error && <p className="error">{error}</p>}
-          {previewUrl && <img className="test-source-preview" src={previewUrl} alt="测试原图" />}
-        </div>
-        <div className="test-result-panel">
-          {compareResults ? (
-            <div className="compare-result-grid">
+    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+      <Space size={4} wrap>
+        <Tag>{preset.width}x{preset.height}</Tag>
+        <Tag color="cyan">{viewAngleText(preset)}</Tag>
+        <Tag color={STATUS_META[preset.status ?? "draft"].color}>
+          {STATUS_META[preset.status ?? "draft"].label}
+        </Tag>
+      </Space>
+
+      <Upload.Dragger {...uploadProps} fileList={[] as UploadFile[]}>
+        <p className="ant-upload-drag-icon"><UploadOutlined /></p>
+        <p className="ant-upload-text">{file ? file.name : "点击或拖拽一张测试图片"}</p>
+      </Upload.Dragger>
+
+      <Space>
+        <Button
+          type="primary"
+          icon={<PlayCircleOutlined />}
+          onClick={runTest}
+          loading={isProcessing}
+        >
+          运行测试：{providerLabel(poseProvider)}
+        </Button>
+        <Button icon={<ExperimentOutlined />} onClick={runCompare} loading={isProcessing}>
+          对比两种方案
+        </Button>
+      </Space>
+
+      {previewUrl && (
+        <Card size="small" title="原图">
+          <Image src={previewUrl} alt="测试原图" style={{ maxHeight: 320, objectFit: "contain" }} />
+        </Card>
+      )}
+
+      {compareResults ? (
+        <Card size="small" title="对比结果">
+          <Image.PreviewGroup>
+            <div className="grid grid-cols-2 gap-3">
               {Object.entries(compareResults).map(([provider, response]) => {
                 const compareCrop = response.crops[0];
                 return (
-                  <article className="compare-result-card" key={provider}>
-                    <strong>{providerLabel(provider as PoseProviderId)}</strong>
-                    {compareCrop && <img src={`data:image/png;base64,${compareCrop.image}`} alt={provider} />}
-                    {compareCrop && (
-                      <span>
-                        输出 {compareCrop.width}x{compareCrop.height} · BBox L{compareCrop.box.left} T{compareCrop.box.top}
-                      </span>
+                  <div key={provider} className="flex flex-col gap-1">
+                    <Text strong style={{ fontSize: 12 }}>{providerLabel(provider as PoseProviderId)}</Text>
+                    {compareCrop ? (
+                      <>
+                        <Image
+                          src={`data:image/png;base64,${compareCrop.image}`}
+                          alt={provider}
+                          style={{ objectFit: "contain", maxHeight: 220 }}
+                        />
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          {compareCrop.width}x{compareCrop.height} · L{compareCrop.box.left} T{compareCrop.box.top}
+                        </Text>
+                      </>
+                    ) : (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无结果" />
                     )}
-                  </article>
+                  </div>
                 );
               })}
             </div>
-          ) : crop ? (
-            <>
-              <img src={`data:image/png;base64,${crop.image}`} alt={crop.name} />
-              <div className="test-result-meta">
-                <strong>{crop.name}</strong>
-                <span>
-                  原图 {result?.source.width}x{result?.source.height} · 输出 {crop.width}x{crop.height}
-                </span>
-                <span>
-                  BBox L{crop.box.left} T{crop.box.top} R{crop.box.right} B{crop.box.bottom}
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="empty-state">运行测试后查看裁切结果</div>
-          )}
-        </div>
-      </div>
-    </section>
+          </Image.PreviewGroup>
+        </Card>
+      ) : crop ? (
+        <Card size="small" title={crop.name}>
+          <div className="flex flex-col gap-2">
+            <Image
+              src={`data:image/png;base64,${crop.image}`}
+              alt={crop.name}
+              style={{ objectFit: "contain", maxHeight: 360 }}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              原图 {result?.source.width}x{result?.source.height} · 输出 {crop.width}x{crop.height}
+            </Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              BBox L{crop.box.left} T{crop.box.top} R{crop.box.right} B{crop.box.bottom}
+            </Text>
+          </div>
+        </Card>
+      ) : (
+        <Empty description="运行测试后查看裁切结果" />
+      )}
+    </Space>
   );
 }
 
@@ -370,10 +417,7 @@ function viewAngleText(preset: CropPreset) {
   return angles.map((viewAngle) => viewAngleLabels[viewAngle]).join(" / ");
 }
 
-function statusLabel(preset: CropPreset) {
-  return STATUS_META[preset.status ?? "draft"].label;
-}
-
 function providerLabel(provider: PoseProviderId | string) {
   return provider === "heuristic" ? "旧方案" : "RTMW-l";
 }
+

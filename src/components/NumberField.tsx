@@ -1,3 +1,7 @@
+import { InputNumber, Typography } from "antd";
+
+const { Text } = Typography;
+
 type NumberFieldProps = {
   label: string;
   value: number;
@@ -8,9 +12,16 @@ type NumberFieldProps = {
 
 export function NumberField({ label, value, onChange, step = 1, min }: NumberFieldProps) {
   return (
-    <label>
-      {label}
-      <input type="number" value={value} step={step} min={min} onChange={(event) => onChange(Number(event.target.value))} />
-    </label>
+    <div className="flex flex-col gap-1">
+      <Text type="secondary" style={{ fontSize: 11 }}>{label}</Text>
+      <InputNumber
+        size="small"
+        value={value}
+        step={step}
+        min={min}
+        onChange={(next) => onChange(Number(next ?? 0))}
+        style={{ width: "100%" }}
+      />
+    </div>
   );
 }

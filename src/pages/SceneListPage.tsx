@@ -1,15 +1,47 @@
-import { Copy, Plus, Save, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { CopyOutlined, DeleteOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Input,
+  Popconfirm,
+  Segmented,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
 import type { CropPreset, CropScene } from "../types";
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 type SceneListPageProps = {
   scenes: CropScene[];
   presets: CropPreset[];
   onSave: (scenes: CropScene[]) => void;
+};
+
+const STATUS_OPTIONS = [
+  { label: "草稿", value: "draft" },
+  { label: "启用", value: "active" },
+  { label: "归档", value: "archived" }
+];
+
+const STATUS_COLORS: Record<CropScene["status"], string> = {
+  draft: "gold",
+  active: "green",
+  archived: "default"
+};
+
+const STATUS_LABELS: Record<CropScene["status"], string> = {
+  draft: "草稿",
+  active: "启用",
+  archived: "归档"
 };
 
 export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
@@ -18,6 +50,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [presetQuery, setPresetQuery] = useState("");
   const [activePresetTags, setActivePresetTags] = useState<string[]>([]);
+
   const selectedScene = useMemo(
     () => scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0],
     [scenes, selectedSceneId]
@@ -30,9 +63,9 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
     () => Array.from(new Set(presets.flatMap((preset) => preset.tags ?? []))).sort(),
     [presets]
   );
+
   const visibleScenes = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-
     return scenes.filter((scene) => {
       const searchableText = [
         scene.name,
@@ -43,15 +76,14 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
       ].join(" ").toLowerCase();
       const matchesQuery = !normalizedQuery || searchableText.includes(normalizedQuery);
       const matchesTags = activeTags.every((tag) => scene.tags.includes(tag));
-
       return matchesQuery && matchesTags;
     });
   }, [activeTags, query, scenes]);
+
   const visiblePresets = useMemo(() => {
     const normalizedQuery = presetQuery.trim().toLowerCase();
-
     return presets.filter((preset) => {
-      const presetTags = preset.tags ?? [];
+      const tags = preset.tags ?? [];
       const searchableText = [
         preset.name,
         preset.id,
@@ -59,11 +91,10 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
         preset.note,
         preset.width,
         preset.height,
-        presetTags.join(" ")
+        tags.join(" ")
       ].join(" ").toLowerCase();
       const matchesQuery = !normalizedQuery || searchableText.includes(normalizedQuery);
-      const matchesTags = activePresetTags.every((tag) => presetTags.includes(tag));
-
+      const matchesTags = activePresetTags.every((tag) => tags.includes(tag));
       return matchesQuery && matchesTags;
     });
   }, [activePresetTags, presetQuery, presets]);
@@ -108,267 +139,302 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
     const presetIds = scene.presetIds.includes(presetId)
       ? scene.presetIds.filter((id) => id !== presetId)
       : [...scene.presetIds, presetId];
-    const bindings = presetIds.map((id) => scene.presets.find((item) => item.presetId === id) ?? { presetId: id, enabled: true, alias: "" });
+    const bindings = presetIds.map(
+      (id) => scene.presets.find((item) => item.presetId === id) ?? { presetId: id, enabled: true, alias: "" }
+    );
     updateScene(scene.id, { presetIds, presets: bindings });
   };
 
   const togglePresetTag = (scene: CropScene, tag: string) => {
     const taggedPresetIds = presets.filter((preset) => (preset.tags ?? []).includes(tag)).map((preset) => preset.id);
     if (taggedPresetIds.length === 0) return;
-
     const taggedPresetSet = new Set(taggedPresetIds);
     const hasEveryTaggedPreset = taggedPresetIds.every((id) => scene.presetIds.includes(id));
     const presetIds = hasEveryTaggedPreset
       ? scene.presetIds.filter((id) => !taggedPresetSet.has(id))
       : Array.from(new Set([...scene.presetIds, ...taggedPresetIds]));
-    const bindings = presetIds.map((id) => scene.presets.find((item) => item.presetId === id) ?? { presetId: id, enabled: true, alias: "" });
-
+    const bindings = presetIds.map(
+      (id) => scene.presets.find((item) => item.presetId === id) ?? { presetId: id, enabled: true, alias: "" }
+    );
     updateScene(scene.id, { presetIds, presets: bindings });
   };
 
-  const clearSceneFilters = () => {
-    setQuery("");
-    setActiveTags([]);
-  };
-
-  const clearPresetFilters = () => {
-    setPresetQuery("");
-    setActivePresetTags([]);
-  };
+  const sceneColumns: ColumnsType<CropScene> = [
+    {
+      title: "场景",
+      dataIndex: "name",
+      key: "name",
+      render: (_, scene) => (
+        <div className="flex flex-col">
+          <Text strong>{scene.name}</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>{scene.tags.join(", ") || "无标签"}</Text>
+        </div>
+      )
+    },
+    { title: "品牌", dataIndex: "brand", key: "brand", render: (brand) => brand || "—" },
+    {
+      title: "预设",
+      dataIndex: "presetIds",
+      key: "presetIds",
+      width: 80,
+      render: (presetIds: string[]) => <Badge count={presetIds.length} showZero color="#1c6b62" />
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 80,
+      render: (status: CropScene["status"]) => (
+        <Tag color={STATUS_COLORS[status]} style={{ marginInlineEnd: 0 }}>
+          {STATUS_LABELS[status]}
+        </Tag>
+      )
+    }
+  ];
 
   return (
-    <section className="management-page">
-      <div className="page-header">
-        <div>
-          <h2>场景管理</h2>
-          <p>为品牌编排一组裁切预设，并用标签支持运营检索</p>
-        </div>
-        <Button type="button" onClick={addScene}>
-          <Plus size={17} />
-          <span>新建场景</span>
-        </Button>
-      </div>
-
-      <div className="management-tools">
-        <div className="input-with-icon">
-          <Search size={16} />
-          <Input
-            value={query}
+    <div className="flex flex-col gap-3">
+      <Card
+        size="small"
+        title={
+          <div className="flex flex-col gap-0.5">
+            <Title level={5} style={{ margin: 0 }}>场景管理</Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>为品牌编排一组裁切预设，并用标签支持运营检索</Text>
+          </div>
+        }
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={addScene}>
+            新建场景
+          </Button>
+        }
+      >
+        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+          <Input.Search
             placeholder="搜索场景名称、品牌、标签、状态或说明"
+            value={query}
             onChange={(event) => setQuery(event.target.value)}
+            allowClear
           />
-        </div>
-        <div className="tag-filter">
-          {sceneTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className={activeTags.includes(tag) ? "active" : ""}
-              onClick={() =>
-                setActiveTags((current) =>
-                  current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
-                )
-              }
-            >
-              {tag}
-            </button>
-          ))}
-          {(query || activeTags.length > 0) && (
-            <button type="button" className="ghost-chip" onClick={clearSceneFilters}>
-              清除筛选
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="scene-workspace">
-        <div className="scene-list-panel">
-          <div className="scene-list-header">
-            <strong>场景列表</strong>
-            <span>{visibleScenes.length} / {scenes.length} 个</span>
-          </div>
-          <div className="preset-table-shell">
-            <table className="preset-data-table scene-table">
-              <thead>
-                <tr>
-                  <th>场景</th>
-                  <th>品牌</th>
-                  <th>预设</th>
-                  <th>状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleScenes.map((scene) => (
-                  <tr
-                    key={scene.id}
-                    className={selectedScene?.id === scene.id ? "selected" : ""}
-                    onClick={() => setSelectedSceneId(scene.id)}
-                  >
-                    <td>
-                      <strong>{scene.name}</strong>
-                      <span>{scene.tags.join(", ") || "无标签"}</span>
-                    </td>
-                    <td>{scene.brand || "未设置"}</td>
-                    <td>{scene.presetIds.length}</td>
-                    <td>
-                      <span className={`status-pill ${scene.status === "active" ? "ready" : scene.status === "archived" ? "" : "incomplete"}`}>
-                        {scene.status === "active" ? "启用" : scene.status === "archived" ? "归档" : "草稿"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {visibleScenes.length === 0 && (
-              <div className="empty-state compact">{scenes.length === 0 ? "暂无场景" : "没有匹配的场景"}</div>
-            )}
-          </div>
-        </div>
-
-        {selectedScene && (
-          <article className="scene-detail-panel">
-            <div className="scene-detail-head">
-              <div>
-                <span>当前编辑</span>
-                <h2>{selectedScene.name}</h2>
-              </div>
-              <div className="row-actions">
-                <Button type="button" variant="secondary" size="icon" className="icon-button" title="复制" onClick={() => duplicateScene(selectedScene)}>
-                  <Copy size={15} />
-                </Button>
-                <Button type="button" variant="secondary" size="icon" className="icon-button danger" title="删除" onClick={() => removeScene(selectedScene.id)}>
-                  <Trash2 size={15} />
-                </Button>
-              </div>
-            </div>
-
-            <div className="scene-form-grid">
-              <div className="form-field">
-                <Label htmlFor={`scene-name-${selectedScene.id}`}>场景名称</Label>
-                <Input id={`scene-name-${selectedScene.id}`} value={selectedScene.name} onChange={(event) => updateScene(selectedScene.id, { name: event.target.value })} />
-              </div>
-              <div className="form-field">
-                <Label htmlFor={`scene-brand-${selectedScene.id}`}>品牌</Label>
-                <Input id={`scene-brand-${selectedScene.id}`} value={selectedScene.brand} onChange={(event) => updateScene(selectedScene.id, { brand: event.target.value })} />
-              </div>
-              <div className="form-field">
-                <Label htmlFor={`scene-tags-${selectedScene.id}`}>标签</Label>
-                <Input
-                  id={`scene-tags-${selectedScene.id}`}
-                  value={selectedScene.tags.join(", ")}
-                  onChange={(event) =>
-                    updateScene(selectedScene.id, {
-                      tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean)
-                    })
+          {sceneTags.length > 0 && (
+            <Space size={4} wrap>
+              {sceneTags.map((tag) => (
+                <Tag.CheckableTag
+                  key={tag}
+                  checked={activeTags.includes(tag)}
+                  onChange={() =>
+                    setActiveTags((current) =>
+                      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+                    )
                   }
-                />
-              </div>
-              <div className="form-field">
-                <Label htmlFor={`scene-status-${selectedScene.id}`}>状态</Label>
-                <select
-                  id={`scene-status-${selectedScene.id}`}
-                  className="scene-status-select"
-                  value={selectedScene.status}
-                  onChange={(event) => updateScene(selectedScene.id, { status: event.target.value as CropScene["status"] })}
                 >
-                  <option value="draft">草稿</option>
-                  <option value="active">启用</option>
-                  <option value="archived">归档</option>
-                </select>
-              </div>
-            </div>
-            <div className="form-field">
-              <Label htmlFor={`scene-description-${selectedScene.id}`}>说明</Label>
-              <Textarea
-                id={`scene-description-${selectedScene.id}`}
-                value={selectedScene.description}
-                onChange={(event) => updateScene(selectedScene.id, { description: event.target.value })}
-              />
-            </div>
+                  {tag}
+                </Tag.CheckableTag>
+              ))}
+            </Space>
+          )}
+        </Space>
+      </Card>
 
-            <div className="scene-preset-list">
-              <div className="sample-list-header">
-                <strong>绑定预设</strong>
-                <span>{selectedScene.presetIds.length} 已绑定 · {visiblePresets.length} / {presets.length} 可见</span>
+      <div className="grid gap-3 lg:grid-cols-[380px_minmax(0,1fr)]">
+        <Card
+          size="small"
+          title="场景列表"
+          extra={<Text type="secondary" style={{ fontSize: 12 }}>{visibleScenes.length} / {scenes.length}</Text>}
+        >
+          <Table
+            rowKey="id"
+            size="small"
+            columns={sceneColumns}
+            dataSource={visibleScenes}
+            pagination={false}
+            scroll={{ y: 480 }}
+            rowClassName={(scene) => (selectedScene?.id === scene.id ? "bg-[#e3efed]" : "")}
+            onRow={(scene) => ({
+              onClick: () => setSelectedSceneId(scene.id),
+              style: { cursor: "pointer" }
+            })}
+            locale={{ emptyText: <Empty description={scenes.length === 0 ? "暂无场景" : "没有匹配的场景"} /> }}
+          />
+        </Card>
+
+        {selectedScene ? (
+          <Card
+            size="small"
+            title={
+              <div className="flex flex-col gap-0.5">
+                <Text type="secondary" style={{ fontSize: 11 }}>当前编辑</Text>
+                <Title level={5} style={{ margin: 0 }}>{selectedScene.name}</Title>
               </div>
-              <div className="preset-binding-tools">
-                <div className="input-with-icon">
-                  <Search size={16} />
+            }
+            extra={
+              <Space>
+                <Button size="small" icon={<CopyOutlined />} onClick={() => duplicateScene(selectedScene)}>
+                  复制
+                </Button>
+                <Popconfirm
+                  title="确认删除该场景？"
+                  okText="删除"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={() => removeScene(selectedScene.id)}
+                >
+                  <Button size="small" danger icon={<DeleteOutlined />}>
+                    删除
+                  </Button>
+                </Popconfirm>
+              </Space>
+            }
+          >
+            <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Text type="secondary" style={{ fontSize: 12 }}>场景名称</Text>
                   <Input
-                    value={presetQuery}
-                    placeholder="搜索预设名称、ID、尺寸、标签、状态或说明"
-                    onChange={(event) => setPresetQuery(event.target.value)}
+                    value={selectedScene.name}
+                    onChange={(event) => updateScene(selectedScene.id, { name: event.target.value })}
                   />
                 </div>
-                <div className="tag-filter">
-                  {presetTags.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className={activePresetTags.includes(tag) ? "active" : ""}
-                      onClick={() =>
-                        setActivePresetTags((current) =>
-                          current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
-                        )
-                      }
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                  {(presetQuery || activePresetTags.length > 0) && (
-                    <button type="button" className="ghost-chip" onClick={clearPresetFilters}>
-                      清除筛选
-                    </button>
-                  )}
+                <div className="flex flex-col gap-1">
+                  <Text type="secondary" style={{ fontSize: 12 }}>品牌</Text>
+                  <Input
+                    value={selectedScene.brand}
+                    onChange={(event) => updateScene(selectedScene.id, { brand: event.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Text type="secondary" style={{ fontSize: 12 }}>标签</Text>
+                  <Select
+                    mode="tags"
+                    value={selectedScene.tags}
+                    placeholder="回车添加标签"
+                    onChange={(tags) => updateScene(selectedScene.id, { tags })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Text type="secondary" style={{ fontSize: 12 }}>状态</Text>
+                  <Segmented
+                    value={selectedScene.status}
+                    options={STATUS_OPTIONS}
+                    onChange={(value) => updateScene(selectedScene.id, { status: value as CropScene["status"] })}
+                  />
                 </div>
               </div>
-              <div className="preset-tag-binding">
-                <span>按预设标签绑定</span>
-                <div className="tag-filter">
-                  {presetTags.map((tag) => {
-                    const taggedPresets = presets.filter((preset) => (preset.tags ?? []).includes(tag));
-                    const isActive = taggedPresets.length > 0 && taggedPresets.every((preset) => selectedScene.presetIds.includes(preset.id));
+              <div className="flex flex-col gap-1">
+                <Text type="secondary" style={{ fontSize: 12 }}>说明</Text>
+                <TextArea
+                  rows={3}
+                  value={selectedScene.description}
+                  onChange={(event) => updateScene(selectedScene.id, { description: event.target.value })}
+                />
+              </div>
 
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={isActive ? "active" : ""}
-                        onClick={() => togglePresetTag(selectedScene, tag)}
-                      >
-                        {tag}
-                        <small>{taggedPresets.length}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="scene-preset-grid">
-                {visiblePresets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    className={selectedScene.presetIds.includes(preset.id) ? "active" : ""}
-                    onClick={() => togglePreset(selectedScene, preset.id)}
-                  >
-                    <span>
-                      <strong>{preset.name}</strong>
-                      <small>{preset.width}x{preset.height} · {(preset.tags ?? []).join(", ")}</small>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {visiblePresets.length === 0 && (
-                <div className="empty-state compact">{presets.length === 0 ? "暂无预设" : "没有匹配的预设"}</div>
-              )}
-            </div>
-          </article>
+              <Card
+                size="small"
+                type="inner"
+                title="绑定预设"
+                extra={
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {selectedScene.presetIds.length} 已绑定 · {visiblePresets.length} / {presets.length} 可见
+                  </Text>
+                }
+              >
+                <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                  <Input.Search
+                    placeholder="搜索预设名称、ID、尺寸、标签、状态或说明"
+                    value={presetQuery}
+                    onChange={(event) => setPresetQuery(event.target.value)}
+                    allowClear
+                  />
+                  {presetTags.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <Text type="secondary" style={{ fontSize: 11 }}>预设标签</Text>
+                      <Space size={4} wrap>
+                        {presetTags.map((tag) => (
+                          <Tag.CheckableTag
+                            key={tag}
+                            checked={activePresetTags.includes(tag)}
+                            onChange={() =>
+                              setActivePresetTags((current) =>
+                                current.includes(tag)
+                                  ? current.filter((item) => item !== tag)
+                                  : [...current, tag]
+                              )
+                            }
+                          >
+                            {tag}
+                          </Tag.CheckableTag>
+                        ))}
+                      </Space>
+                    </div>
+                  )}
+                  {presetTags.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <Text type="secondary" style={{ fontSize: 11 }}>按标签批量绑定</Text>
+                      <Space size={4} wrap>
+                        {presetTags.map((tag) => {
+                          const taggedPresets = presets.filter((preset) => (preset.tags ?? []).includes(tag));
+                          const isActive =
+                            taggedPresets.length > 0 &&
+                            taggedPresets.every((preset) => selectedScene.presetIds.includes(preset.id));
+                          return (
+                            <Button
+                              key={tag}
+                              size="small"
+                              type={isActive ? "primary" : "default"}
+                              onClick={() => togglePresetTag(selectedScene, tag)}
+                            >
+                              {tag}
+                              <Badge
+                                count={taggedPresets.length}
+                                showZero
+                                color={isActive ? "rgba(255,255,255,0.3)" : "#d9d9d9"}
+                                style={{ marginInlineStart: 6 }}
+                              />
+                            </Button>
+                          );
+                        })}
+                      </Space>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                    {visiblePresets.map((preset) => {
+                      const bound = selectedScene.presetIds.includes(preset.id);
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => togglePreset(selectedScene, preset.id)}
+                          className={`flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-xs transition ${
+                            bound
+                              ? "border-[#1c6b62] bg-[#e3efed]"
+                              : "border-[#e6ebe6] bg-white hover:border-[#1c6b62]"
+                          }`}
+                        >
+                          <Text strong style={{ fontSize: 12 }}>{preset.name}</Text>
+                          <Text type="secondary" style={{ fontSize: 10 }}>
+                            {preset.width}x{preset.height} · {(preset.tags ?? []).join(", ") || "无标签"}
+                          </Text>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {visiblePresets.length === 0 && (
+                    <Empty description={presets.length === 0 ? "暂无预设" : "没有匹配的预设"} />
+                  )}
+                </Space>
+              </Card>
+            </Space>
+          </Card>
+        ) : (
+          <Card size="small">
+            <Empty description="选择或新建一个场景" />
+          </Card>
         )}
       </div>
-      <div className="floating-save-note">
-        <Save size={15} />
-        <span>编辑会自动保存到后端 JSON</span>
+
+      <div className="flex items-center justify-end">
+        <Tag icon={<SaveOutlined />} color="cyan">编辑会自动保存到后端 JSON</Tag>
       </div>
-    </section>
+    </div>
   );
 }
