@@ -54,6 +54,7 @@ export type CropResult = {
   box: { left: number; top: number; right: number; bottom: number };
   image: string;
   outputPath?: string | null;
+  imageUrl?: string | null;
 };
 
 export type ProcessResponse = {

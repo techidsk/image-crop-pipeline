@@ -11,14 +11,14 @@ type CropCardProps = {
 
 export function CropCard({ filename, crop }: CropCardProps) {
   const safeName = filename.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "_");
-  const dataUrl = `data:image/png;base64,${crop.image}`;
+  const src = crop.imageUrl || (crop.image ? `data:image/png;base64,${crop.image}` : "");
   return (
     <Card
       size="small"
       styles={{ body: { padding: 8 } }}
-      cover={<Image src={dataUrl} alt={crop.name} preview={{ src: dataUrl }} style={{ objectFit: "cover" }} />}
+      cover={<Image src={src} alt={crop.name} preview={{ src }} style={{ objectFit: "cover" }} />}
       actions={[
-        <a key="download" href={dataUrl} download={`${safeName}_${crop.presetId}.png`} aria-label={`下载 ${crop.name}`}>
+        <a key="download" href={src} download={`${safeName}_${crop.presetId}.png`} aria-label={`下载 ${crop.name}`}>
           <DownloadOutlined /> 下载
         </a>
       ]}

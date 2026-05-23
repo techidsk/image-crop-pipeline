@@ -279,6 +279,27 @@ def download_batch_job_output(job_id: str) -> FileResponse:
     )
 
 
+@app.get("/api/batch-jobs/{job_id}/files/{relative_path:path}")
+def serve_batch_job_file(job_id: str, relative_path: str) -> FileResponse:
+    job = get_batch_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+    job_root = Path(job.outputDir).expanduser().resolve()
+    target = (job_root / relative_path).resolve()
+    try:
+        rel = target.relative_to(job_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="Path outside job directory") from exc
+    if ORIGINALS_DIRNAME in rel.parts:
+        raise HTTPException(status_code=403, detail="Originals are private")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        target,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 @app.patch("/api/batch-jobs/{job_id}/review", response_model=BatchJob)
 def patch_batch_job_review(job_id: str, update: ReviewStatusUpdate) -> BatchJob:
     job = update_batch_job_review_status(job_id, update.reviewStatus)
@@ -350,17 +371,29 @@ async def process_upload_to_output_dir(
     image: UploadFile,
     crop_presets: list[CropPreset],
     output_dir: Path,
+    job_id: str,
     provider_name: str | None = None,
 ) -> ProcessResponse:
     response = await process_upload(image, crop_presets, provider_name)
     source_name = safe_filename(response.filename or image.filename or "image")
     next_crops: list[CropResult] = []
     for crop in response.crops:
-        preset_dir = output_dir / safe_filename(crop.presetId)
+        preset_subdir = safe_filename(crop.presetId)
+        preset_dir = output_dir / preset_subdir
         preset_dir.mkdir(parents=True, exist_ok=True)
-        output_path = preset_dir / f"{source_name}_{safe_filename(crop.presetId)}.png"
+        filename = f"{source_name}_{safe_filename(crop.presetId)}.png"
+        output_path = preset_dir / filename
         output_path.write_bytes(base64.b64decode(crop.image))
-        next_crops.append(crop.model_copy(update={"outputPath": str(output_path)}))
+        image_url = f"/api/batch-jobs/{job_id}/files/{preset_subdir}/{filename}"
+        next_crops.append(
+            crop.model_copy(
+                update={
+                    "image": "",
+                    "outputPath": str(output_path),
+                    "imageUrl": image_url,
+                }
+            )
+        )
     return response.model_copy(update={"crops": next_crops})
 
 
@@ -604,7 +637,9 @@ async def run_batch_job(
     for filename, raw in uploaded:
         upload = UploadFile(file=BytesIO(raw), filename=filename)
         try:
-            result = await process_upload_to_output_dir(upload, crop_presets, job_dir, actual_provider)
+            result = await process_upload_to_output_dir(
+                upload, crop_presets, job_dir, job_id, actual_provider
+            )
             results.append(result)
             image_reports.append(
                 BatchJobImage(filename=filename, outputs=len(result.crops))
@@ -761,7 +796,9 @@ async def _batch_job_events(
             )
             try:
                 upload = UploadFile(file=BytesIO(raw), filename=filename)
-                result = await process_upload_to_output_dir(upload, crop_presets, job_dir, actual_provider)
+                result = await process_upload_to_output_dir(
+                    upload, crop_presets, job_dir, job_id, actual_provider
+                )
                 results.append(result)
                 report = BatchJobImage(filename=filename, outputs=len(result.crops))
                 image_reports.append(report)

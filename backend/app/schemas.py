@@ -66,8 +66,9 @@ class CropResult(BaseModel):
     width: int
     height: int
     box: CropBox
-    image: str
+    image: str = ""
     outputPath: str | None = None
+    imageUrl: str | None = None
 
 
 class ProcessResponse(BaseModel):
