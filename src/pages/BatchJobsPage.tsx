@@ -362,31 +362,36 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       dataIndex: "outputDir",
       key: "outputDir",
       render: (_, job) => (
-        <Space size={4}>
-          <Button
-            size="small"
-            type="link"
-            icon={<FolderOpenOutlined />}
-            onClick={(event) => {
-              event.stopPropagation();
-              void openOutputDir(job);
-            }}
-          >
-            {job.outputDir}
-          </Button>
-          <Button
-            size="small"
-            type="link"
-            icon={<DownloadOutlined />}
-            disabled={job.outputCount === 0}
-            onClick={(event) => {
-              event.stopPropagation();
-              downloadOutput(job);
-            }}
-          >
-            下载
-          </Button>
-        </Space>
+        <Button
+          size="small"
+          type="link"
+          icon={<FolderOpenOutlined />}
+          onClick={(event) => {
+            event.stopPropagation();
+            void openOutputDir(job);
+          }}
+        >
+          {job.outputDir}
+        </Button>
+      )
+    },
+    {
+      title: "下载",
+      key: "download",
+      width: 90,
+      render: (_, job) => (
+        <Button
+          size="small"
+          type="link"
+          icon={<DownloadOutlined />}
+          disabled={job.outputCount === 0}
+          onClick={(event) => {
+            event.stopPropagation();
+            downloadOutput(job);
+          }}
+        >
+          下载
+        </Button>
       )
     },
     {
