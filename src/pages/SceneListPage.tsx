@@ -50,7 +50,6 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
   const [query, setQuery] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [presetQuery, setPresetQuery] = useState("");
-  const [activePresetTags, setActivePresetTags] = useState<string[]>([]);
 
   const selectedScene = useMemo(
     () => scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0],
@@ -94,11 +93,9 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
         preset.height,
         tags.join(" ")
       ].join(" ").toLowerCase();
-      const matchesQuery = !normalizedQuery || searchableText.includes(normalizedQuery);
-      const matchesTags = activePresetTags.every((tag) => tags.includes(tag));
-      return matchesQuery && matchesTags;
+      return !normalizedQuery || searchableText.includes(normalizedQuery);
     });
-  }, [activePresetTags, presetQuery, presets]);
+  }, [presetQuery, presets]);
 
   useEffect(() => {
     if (!selectedScene && scenes[0]) setSelectedSceneId(scenes[0].id);
@@ -165,26 +162,32 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
       title: "场景",
       dataIndex: "name",
       key: "name",
+      ellipsis: true,
       render: (_, scene) => (
-        <Flex vertical>
-          <Text strong>{scene.name}</Text>
-          <Text type="secondary">{scene.tags.join(", ") || "无标签"}</Text>
+        <Flex vertical style={{ minWidth: 0 }}>
+          <Text strong ellipsis={{ tooltip: scene.name }} style={{ display: "block" }}>
+            {scene.name}
+          </Text>
+          <Text type="secondary" ellipsis style={{ fontSize: 12, display: "block" }}>
+            {scene.brand ? `${scene.brand} · ` : ""}
+            {scene.tags.join(", ") || "无标签"}
+          </Text>
         </Flex>
       )
     },
-    { title: "品牌", dataIndex: "brand", key: "brand", render: (brand) => brand || "—" },
     {
       title: "预设",
       dataIndex: "presetIds",
       key: "presetIds",
-      width: 80,
+      width: 64,
+      align: "center",
       render: (presetIds: string[]) => <Badge count={presetIds.length} showZero color="#1c6b62" />
     },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
-      width: 80,
+      width: 72,
       render: (status: CropScene["status"]) => (
         <Tag color={STATUS_COLORS[status]} style={{ marginInlineEnd: 0 }}>
           {STATUS_LABELS[status]}
@@ -209,7 +212,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
           </Button>
         }
       >
-        <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+        <Flex vertical gap={12}>
           <Input.Search
             placeholder="搜索场景名称、品牌、标签、状态或说明"
             value={query}
@@ -217,23 +220,40 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
             allowClear
           />
           {sceneTags.length > 0 && (
-            <Space size={4} wrap>
-              {sceneTags.map((tag) => (
-                <Tag.CheckableTag
-                  key={tag}
-                  checked={activeTags.includes(tag)}
-                  onChange={() =>
-                    setActiveTags((current) =>
-                      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
-                    )
-                  }
-                >
-                  {tag}
-                </Tag.CheckableTag>
-              ))}
-            </Space>
+            <Flex vertical gap={6}>
+              <Flex align="center" justify="space-between">
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  按标签筛选{activeTags.length > 0 ? ` · 已选 ${activeTags.length}` : ""}
+                </Text>
+                {activeTags.length > 0 && (
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: "auto", fontSize: 12 }}
+                    onClick={() => setActiveTags([])}
+                  >
+                    清空
+                  </Button>
+                )}
+              </Flex>
+              <Space size={[4, 4]} wrap>
+                {sceneTags.map((tag) => (
+                  <Tag.CheckableTag
+                    key={tag}
+                    checked={activeTags.includes(tag)}
+                    onChange={() =>
+                      setActiveTags((current) =>
+                        current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
+                      )
+                    }
+                  >
+                    {tag}
+                  </Tag.CheckableTag>
+                ))}
+              </Space>
+            </Flex>
           )}
-        </Space>
+        </Flex>
       </Card>
 
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "380px minmax(0, 1fr)" }}>
@@ -286,7 +306,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
               </Space>
             }
           >
-            <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+            <Flex vertical gap={16}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
                 <Flex vertical gap={4}>
                   <Text type="secondary">场景名称</Text>
@@ -339,7 +359,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                   </Text>
                 }
               >
-                <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                <Flex vertical gap={12}>
                   <Input.Search
                     placeholder="搜索预设名称、ID、尺寸、标签、状态或说明"
                     value={presetQuery}
@@ -347,31 +367,9 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                     allowClear
                   />
                   {presetTags.length > 0 && (
-                    <Flex vertical gap={4}>
-                      <Text type="secondary">预设标签</Text>
-                      <Space size={4} wrap>
-                        {presetTags.map((tag) => (
-                          <Tag.CheckableTag
-                            key={tag}
-                            checked={activePresetTags.includes(tag)}
-                            onChange={() =>
-                              setActivePresetTags((current) =>
-                                current.includes(tag)
-                                  ? current.filter((item) => item !== tag)
-                                  : [...current, tag]
-                              )
-                            }
-                          >
-                            {tag}
-                          </Tag.CheckableTag>
-                        ))}
-                      </Space>
-                    </Flex>
-                  )}
-                  {presetTags.length > 0 && (
-                    <Flex vertical gap={4}>
-                      <Text type="secondary">按标签批量绑定</Text>
-                      <Space size={4} wrap>
+                    <Flex vertical gap={6}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>按标签批量绑定</Text>
+                      <Space size={[4, 4]} wrap>
                         {presetTags.map((tag) => {
                           const taggedPresets = presets.filter((preset) => (preset.tags ?? []).includes(tag));
                           const isActive =
@@ -437,9 +435,9 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                   {visiblePresets.length === 0 && (
                     <Empty description={presets.length === 0 ? "暂无预设" : "没有匹配的预设"} />
                   )}
-                </Space>
+                </Flex>
               </Card>
-            </Space>
+            </Flex>
           </Card>
         ) : (
           <Card size="small">
