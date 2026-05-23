@@ -139,6 +139,27 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
     });
   };
 
+  const rerunAllSelectedJob = async () => {
+    if (!selectedJob) return;
+    setIsRunning(true);
+    setProgress(null);
+    try {
+      const response = await fetch(
+        `/api/batch-jobs/${encodeURIComponent(selectedJob.id)}/rerun-all`,
+        { method: "POST" }
+      );
+      if (!response.ok || !response.body) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? "整单重跑失败");
+      }
+      await readStream(response.body);
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : "整单重跑失败");
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const rerunSelectedJob = async () => {
     if (!selectedJob) return;
     if (rerunnableFiles.length === 0) {
@@ -547,6 +568,14 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
                   onClick={() => void updateJobReview(selectedJob, "rejected")}
                 >
                   整单驳回
+                </Button>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  disabled={isRunning}
+                  onClick={rerunAllSelectedJob}
+                >
+                  整单重跑
                 </Button>
                 <Button
                   size="small"
