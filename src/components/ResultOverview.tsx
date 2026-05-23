@@ -1,13 +1,13 @@
-import { Image, Space, Tag, Typography } from "antd";
+import { Flex, Image, Space, Tag, Typography } from "antd";
 import type { ProcessResponse } from "../types";
 import { viewAngleLabels } from "../constants";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 export function ResultOverview({ result }: { result: ProcessResponse }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
+    <Flex vertical gap={12}>
+      <Flex align="flex-start" justify="space-between" gap={12}>
         <Title level={5} style={{ margin: 0 }}>{result.filename}</Title>
         <Space size={4} wrap>
           <Tag color="blue">{result.source.width}x{result.source.height}</Tag>
@@ -15,9 +15,9 @@ export function ResultOverview({ result }: { result: ProcessResponse }) {
           <Tag>{result.keypoints.length} 节点</Tag>
           <Tag color="green">{result.crops.length} 张输出</Tag>
         </Space>
-      </div>
+      </Flex>
       <Image.PreviewGroup>
-        <div className="flex flex-wrap gap-2">
+        <Flex wrap gap={8}>
           {result.crops.map((crop) => (
             <Image
               key={crop.presetId}
@@ -27,8 +27,8 @@ export function ResultOverview({ result }: { result: ProcessResponse }) {
               style={{ objectFit: "cover", borderRadius: 6 }}
             />
           ))}
-        </div>
+        </Flex>
       </Image.PreviewGroup>
-    </div>
+    </Flex>
   );
 }

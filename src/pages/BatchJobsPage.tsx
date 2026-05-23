@@ -15,6 +15,7 @@ import {
   Button,
   Card,
   Empty,
+  Flex,
   Input,
   Progress,
   Select,
@@ -343,10 +344,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
       key: "id",
       width: 200,
       render: (_, job) => (
-        <div className="flex flex-col">
+        <Flex vertical>
           <Text strong>{job.id}</Text>
           <Text type="secondary">{job.createdAt}</Text>
-        </div>
+        </Flex>
       )
     },
     { title: "场景", dataIndex: "sceneName", key: "sceneName" },
@@ -426,18 +427,18 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
   ];
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[420px_minmax(0,1fr)]">
+    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "420px minmax(0, 1fr)" }}>
       <Card
         size="small"
         title={
-          <div className="flex flex-col gap-0.5">
+          <Flex vertical gap={2}>
             <Title level={5} style={{ margin: 0 }}>批量任务</Title>
             <Text type="secondary">选择品牌场景，多图批量跑姿态识别和裁切输出</Text>
-          </div>
+          </Flex>
         }
       >
         <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-          <div className="flex flex-col gap-1">
+          <Flex vertical gap={4}>
             <Text type="secondary">场景</Text>
             <Select
               value={selectedScene?.id}
@@ -448,8 +449,8 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
               }))}
               placeholder="选择场景"
             />
-          </div>
-          <div className="flex flex-col gap-1">
+          </Flex>
+          <Flex vertical gap={4}>
             <Text type="secondary">输出目录</Text>
             <Input
               prefix={<FolderOpenOutlined />}
@@ -457,7 +458,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
               onChange={(event) => setOutputDir(event.target.value)}
               placeholder="例如 C:\\exports\\brand-a 或 outputs"
             />
-          </div>
+          </Flex>
 
           <Upload.Dragger {...uploadProps}>
             <p className="ant-upload-drag-icon"><InboxOutlined /></p>
@@ -478,7 +479,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
             <Button icon={<ReloadOutlined />} onClick={() => replaceFiles([])}>清空</Button>
           </Space>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
             <Statistic title="原图" value={files.length} />
             <Statistic title="预设" value={selectedScene?.presetIds.length ?? 0} />
             <Statistic
@@ -507,11 +508,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
           {files.length > 0 && (
             <Card size="small" type="inner" title="文件列表" styles={{ body: { padding: 0, maxHeight: 200, overflow: "auto" } }}>
               {files.map((file) => (
-                <div
-                  key={`${file.name}-${file.lastModified}`}
-                  className="flex items-center justify-between border-b border-[#f0f1ed] px-3 py-2 text-xs last:border-b-0"
-                >
-                  <span className="truncate">{file.name}</span>
+                <div key={`${file.name}-${file.lastModified}`} className="list-row-button" style={{ cursor: "default" }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {file.name}
+                  </span>
                   <Text type="secondary">{Math.round(file.size / 1024)} KB</Text>
                 </div>
               ))}
@@ -520,7 +520,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
         </Space>
       </Card>
 
-      <div className="flex flex-col gap-3">
+      <Flex vertical gap={12}>
         <Card
           size="small"
           title={selectedJob ? selectedJob.sceneName : "任务详情"}
@@ -556,7 +556,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
           }
         >
           {selectedJob ? (
-            <div className="grid gap-3 md:grid-cols-[260px_minmax(0,1fr)]">
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "260px minmax(0, 1fr)" }}>
               <JobImageList
                 job={selectedJob}
                 activeFilename={active?.filename}
@@ -571,11 +571,17 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
               <div>
                 {active ? (
                   <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-                    <div className="flex items-center justify-between">
+                    <Flex align="center" justify="space-between">
                       <Text strong>{active.filename}</Text>
                       <Text type="secondary">{active.crops.length} 张输出</Text>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    </Flex>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 12,
+                        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))"
+                      }}
+                    >
                       {active.crops.map((crop) => (
                         <CropCard
                           key={`${active.filename}-${crop.presetId}`}
@@ -609,7 +615,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
             columns={jobColumns}
             dataSource={jobs}
             pagination={{ pageSize: 10, hideOnSinglePage: true, size: "small" }}
-            rowClassName={(job) => (selectedJob?.id === job.id ? "bg-[#e3efed]" : "")}
+            rowClassName={(job) => (selectedJob?.id === job.id ? "row-highlight" : "")}
             onRow={(job) => ({
               onClick: () => setSelectedJobId(job.id),
               style: { cursor: "pointer" }
@@ -617,7 +623,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, onJobCreated, onJobU
             locale={{ emptyText: <Empty description="暂无任务记录" /> }}
           />
         </Card>
-      </div>
+      </Flex>
     </div>
   );
 }
@@ -628,23 +634,25 @@ function ProgressPanel({ progress }: { progress: RunProgress }) {
     <Card size="small" type="inner" title={progress.jobId || "任务准备中"} extra={<Text type="secondary">{progress.completed}/{progress.total}</Text>}>
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
         <Progress percent={percent} size="small" status={percent === 100 ? "success" : "active"} />
-        <div className="flex items-center justify-between">
+        <Flex align="center" justify="space-between">
           <Text type="secondary">{progress.activeFilename || "等待开始"}</Text>
           <Tag color="cyan">{progress.presetCount} 个预设</Tag>
-        </div>
-        <div className="flex flex-col gap-1">
+        </Flex>
+        <Flex vertical gap={4}>
           {progress.events.slice(-5).map((event, index) => (
-            <div
+            <Flex
               key={`${event.filename}-${index}`}
-              className={`flex items-center gap-1.5 text-xs ${event.error ? "text-[#cf1322]" : "text-[#3a4654]"}`}
+              align="center"
+              gap={6}
+              style={{ fontSize: 12, color: event.error ? "#cf1322" : "#3a4654" }}
             >
               {event.error ? <WarningOutlined /> : <CheckCircleOutlined />}
               <Text ellipsis>
                 {event.filename} · {event.error || `${event.outputs} 张输出`}
               </Text>
-            </div>
+            </Flex>
           ))}
-        </div>
+        </Flex>
       </Space>
     </Card>
   );
@@ -662,20 +670,42 @@ function JobImageList({
   onReview: (filename: string, reviewStatus: ReviewStatus) => void;
 }) {
   return (
-    <div className="flex max-h-[520px] flex-col overflow-auto rounded-md border border-[#e6ebe6]">
+    <Flex
+      vertical
+      style={{
+        maxHeight: 520,
+        overflow: "auto",
+        borderRadius: 6,
+        border: "1px solid #e6ebe6"
+      }}
+    >
       {job.images.map((image) => {
         const reviewStatus = image.reviewStatus ?? "pending_review";
+        const isActive = activeFilename === image.filename;
         return (
-          <div
+          <Flex
             key={image.filename}
-            className={`flex flex-col gap-1 border-b border-[#f0f1ed] px-3 py-2 last:border-b-0 ${
-              activeFilename === image.filename ? "bg-[#e3efed]" : "hover:bg-[#f7f8f5]"
-            }`}
+            vertical
+            gap={4}
+            className={isActive ? "list-row-button is-active" : "list-row-button"}
+            style={{ cursor: "default", display: "flex", flexDirection: "column", alignItems: "stretch" }}
           >
             <button
               type="button"
               onClick={() => onSelect(image.filename)}
-              className="flex w-full flex-col items-start gap-0.5 text-left text-xs"
+              style={{
+                display: "flex",
+                width: "100%",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: 2,
+                background: "transparent",
+                border: 0,
+                padding: 0,
+                textAlign: "left",
+                fontSize: 12,
+                cursor: "pointer"
+              }}
             >
               <Text strong style={{ maxWidth: 220 }} ellipsis>
                 {image.filename}
@@ -684,7 +714,7 @@ function JobImageList({
                 {image.error || `${image.outputs} 张输出`}
               </Text>
             </button>
-            <div className="flex items-center justify-between">
+            <Flex align="center" justify="space-between">
               <Tag color={REVIEW_META[reviewStatus].color} style={{ marginInlineEnd: 0 }}>
                 {REVIEW_META[reviewStatus].label}
               </Tag>
@@ -696,11 +726,11 @@ function JobImageList({
               >
                 标异常
               </Button>
-            </div>
-          </div>
+            </Flex>
+          </Flex>
         );
       })}
-    </div>
+    </Flex>
   );
 }
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Batch image-cropping workbench. Upload images → detect human pose keypoints → use pose nodes as anchors → output multiple cropped sizes per preset. Frontend: Vite + React 19 + Tailwind (Bun). Backend: FastAPI + Pillow + ONNX Runtime.
+Batch image-cropping workbench. Upload images → detect human pose keypoints → use pose nodes as anchors → output multiple cropped sizes per preset. Frontend: Vite + React 19 + antd v6 (Bun). Backend: FastAPI + Pillow + ONNX Runtime.
 
 ## Commands
 
@@ -76,3 +76,5 @@ Single-page app, no router library — `App.tsx` does manual `pathname` ↔ view
 - API field names use camelCase on both sides — Pydantic models in `schemas.py` declare fields like `viewAngle`, `presetId`, `outputDir` directly (no alias generator), so the JSON contract matches the TypeScript types in `src/types.ts`.
 - Pose keypoint names follow COCO-WholeBody (`left_shoulder`, `right_hip`, `face_*`, `left_hand_*`, ...). `cropping.py` deliberately restricts bounding-box computation to body-trunk points (`BODY_BOUND_KEYPOINTS`) to avoid finger/face detail points skewing the box.
 - The pose provider input is the whole image as a single subject — no person detector. Multi-person images are not supported.
+- Frontend uses **Bun** as the package manager. Use `bun add` / `bun remove` (not `npm install` / `npm uninstall`) so `bun.lock` stays authoritative. `package-lock.json` is kept only because the deploy workflow uses `npm install` as fallback (see commit `c538dfe`).
+- Frontend styling is **antd-only** — Tailwind was removed. Use antd `<Flex>` / `<Space>` for layout, inline `style` for one-off rules, and `src/styles.css` for the few class-based states that need `:hover` / `:last-child` etc. (`list-row-button`, `row-highlight`, `row-faded`).

@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Empty,
+  Flex,
   Input,
   Popconfirm,
   Segmented,
@@ -165,10 +166,10 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
       dataIndex: "name",
       key: "name",
       render: (_, scene) => (
-        <div className="flex flex-col">
+        <Flex vertical>
           <Text strong>{scene.name}</Text>
           <Text type="secondary">{scene.tags.join(", ") || "无标签"}</Text>
-        </div>
+        </Flex>
       )
     },
     { title: "品牌", dataIndex: "brand", key: "brand", render: (brand) => brand || "—" },
@@ -193,14 +194,14 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
   ];
 
   return (
-    <div className="flex flex-col gap-3">
+    <Flex vertical gap={12}>
       <Card
         size="small"
         title={
-          <div className="flex flex-col gap-0.5">
+          <Flex vertical gap={2}>
             <Title level={5} style={{ margin: 0 }}>场景管理</Title>
             <Text type="secondary">为品牌编排一组裁切预设，并用标签支持运营检索</Text>
-          </div>
+          </Flex>
         }
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={addScene}>
@@ -235,7 +236,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
         </Space>
       </Card>
 
-      <div className="grid gap-3 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "380px minmax(0, 1fr)" }}>
         <Card
           size="small"
           title="场景列表"
@@ -248,7 +249,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
             dataSource={visibleScenes}
             pagination={false}
             scroll={{ y: 480 }}
-            rowClassName={(scene) => (selectedScene?.id === scene.id ? "bg-[#e3efed]" : "")}
+            rowClassName={(scene) => (selectedScene?.id === scene.id ? "row-highlight" : "")}
             onRow={(scene) => ({
               onClick: () => setSelectedSceneId(scene.id),
               style: { cursor: "pointer" }
@@ -261,10 +262,10 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
           <Card
             size="small"
             title={
-              <div className="flex flex-col gap-0.5">
+              <Flex vertical gap={2}>
                 <Text type="secondary">当前编辑</Text>
                 <Title level={5} style={{ margin: 0 }}>{selectedScene.name}</Title>
-              </div>
+              </Flex>
             }
             extra={
               <Space>
@@ -286,22 +287,22 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
             }
           >
             <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                <Flex vertical gap={4}>
                   <Text type="secondary">场景名称</Text>
                   <Input
                     value={selectedScene.name}
                     onChange={(event) => updateScene(selectedScene.id, { name: event.target.value })}
                   />
-                </div>
-                <div className="flex flex-col gap-1">
+                </Flex>
+                <Flex vertical gap={4}>
                   <Text type="secondary">品牌</Text>
                   <Input
                     value={selectedScene.brand}
                     onChange={(event) => updateScene(selectedScene.id, { brand: event.target.value })}
                   />
-                </div>
-                <div className="flex flex-col gap-1">
+                </Flex>
+                <Flex vertical gap={4}>
                   <Text type="secondary">标签</Text>
                   <Select
                     mode="tags"
@@ -309,24 +310,24 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                     placeholder="回车添加标签"
                     onChange={(tags) => updateScene(selectedScene.id, { tags })}
                   />
-                </div>
-                <div className="flex flex-col gap-1">
+                </Flex>
+                <Flex vertical gap={4}>
                   <Text type="secondary">状态</Text>
                   <Segmented
                     value={selectedScene.status}
                     options={STATUS_OPTIONS}
                     onChange={(value) => updateScene(selectedScene.id, { status: value as CropScene["status"] })}
                   />
-                </div>
+                </Flex>
               </div>
-              <div className="flex flex-col gap-1">
+              <Flex vertical gap={4}>
                 <Text type="secondary">说明</Text>
                 <TextArea
                   rows={3}
                   value={selectedScene.description}
                   onChange={(event) => updateScene(selectedScene.id, { description: event.target.value })}
                 />
-              </div>
+              </Flex>
 
               <Card
                 size="small"
@@ -346,7 +347,7 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                     allowClear
                   />
                   {presetTags.length > 0 && (
-                    <div className="flex flex-col gap-1">
+                    <Flex vertical gap={4}>
                       <Text type="secondary">预设标签</Text>
                       <Space size={4} wrap>
                         {presetTags.map((tag) => (
@@ -365,10 +366,10 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                           </Tag.CheckableTag>
                         ))}
                       </Space>
-                    </div>
+                    </Flex>
                   )}
                   {presetTags.length > 0 && (
-                    <div className="flex flex-col gap-1">
+                    <Flex vertical gap={4}>
                       <Text type="secondary">按标签批量绑定</Text>
                       <Space size={4} wrap>
                         {presetTags.map((tag) => {
@@ -394,9 +395,15 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                           );
                         })}
                       </Space>
-                    </div>
+                    </Flex>
                   )}
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 8,
+                      gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))"
+                    }}
+                  >
                     {visiblePresets.map((preset) => {
                       const bound = selectedScene.presetIds.includes(preset.id);
                       return (
@@ -404,11 +411,20 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
                           key={preset.id}
                           type="button"
                           onClick={() => togglePreset(selectedScene, preset.id)}
-                          className={`flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-xs transition ${
-                            bound
-                              ? "border-[#1c6b62] bg-[#e3efed]"
-                              : "border-[#e6ebe6] bg-white hover:border-[#1c6b62]"
-                          }`}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-start",
+                            gap: 4,
+                            borderRadius: 6,
+                            border: `1px solid ${bound ? "#1c6b62" : "#e6ebe6"}`,
+                            background: bound ? "#e3efed" : "#ffffff",
+                            padding: "8px 12px",
+                            textAlign: "left",
+                            fontSize: 12,
+                            cursor: "pointer",
+                            transition: "border-color 0.15s"
+                          }}
                         >
                           <Text strong>{preset.name}</Text>
                           <Text type="secondary">
@@ -432,9 +448,9 @@ export function SceneListPage({ scenes, presets, onSave }: SceneListPageProps) {
         )}
       </div>
 
-      <div className="flex items-center justify-end">
+      <Flex align="center" justify="flex-end">
         <Tag icon={<SaveOutlined />} color="cyan">编辑会自动保存到后端 JSON</Tag>
-      </div>
-    </div>
+      </Flex>
+    </Flex>
   );
 }

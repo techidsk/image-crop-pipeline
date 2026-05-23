@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { InboxOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { App, Button, Card, Empty, Image, Space, Statistic, Tag, Typography, Upload } from "antd";
+import { App, Button, Card, Empty, Flex, Image, Space, Statistic, Tag, Typography, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { CropCard } from "../components/CropCard";
 import { ResultOverview } from "../components/ResultOverview";
@@ -97,14 +97,14 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+    <div style={{ display: "grid", gap: 16, gridTemplateColumns: "380px minmax(0, 1fr)" }}>
       <Card
         size="small"
         title={
-          <div className="flex flex-col gap-0.5">
+          <Flex vertical gap={2}>
             <Title level={5} style={{ margin: 0 }}>批量处理</Title>
             <Text type="secondary">按标签筛选预设，再批量生成输出</Text>
-          </div>
+          </Flex>
         }
       >
         <Space orientation="vertical" size={12} style={{ width: "100%" }}>
@@ -134,7 +134,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
             </Button>
           </Space>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
             <Statistic title="原图" value={files.length} />
             <Statistic title="预设" value={presets.length} />
             <Statistic
@@ -144,7 +144,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
           </div>
 
           {allTags.length > 0 && (
-            <div className="flex flex-col gap-1">
+            <Flex vertical gap={4}>
               <Text type="secondary">标签筛选</Text>
               <Space size={4} wrap>
                 {allTags.map((tag) => (
@@ -157,7 +157,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
                   </Tag.CheckableTag>
                 ))}
               </Space>
-            </div>
+            </Flex>
           )}
 
           {files.length > 0 && (
@@ -166,12 +166,12 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
                 <button
                   key={`${file.name}-${file.lastModified}`}
                   type="button"
-                  className={`flex w-full items-center justify-between border-b border-[#f0f1ed] px-3 py-2 text-left text-xs last:border-b-0 ${
-                    activeResult === index ? "bg-[#e3efed]" : "hover:bg-[#f7f8f5]"
-                  }`}
+                  className={`list-row-button${activeResult === index ? " is-active" : ""}`}
                   onClick={() => setActiveResult(index)}
                 >
-                  <span className="truncate">{file.name}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {file.name}
+                  </span>
                   <Text type="secondary">{Math.round(file.size / 1024)} KB</Text>
                 </button>
               ))}
@@ -180,7 +180,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
         </Space>
       </Card>
 
-      <div className="flex flex-col gap-3">
+      <Flex vertical gap={12}>
         <Card size="small" styles={{ body: { minHeight: 360 } }}>
           {active ? (
             <ResultOverview result={active} />
@@ -196,7 +196,13 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
             title={`${results.length} 张图片完成 · ${totalOutputs} 张输出`}
             extra={<Text type="secondary">当前：{active?.filename ?? "未选择"}</Text>}
           >
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            <div
+              style={{
+                display: "grid",
+                gap: 12,
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))"
+              }}
+            >
               {results.flatMap((result) =>
                 result.crops.map((crop) => (
                   <CropCard
@@ -209,7 +215,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
             </div>
           </Card>
         )}
-      </div>
+      </Flex>
     </div>
   );
 }

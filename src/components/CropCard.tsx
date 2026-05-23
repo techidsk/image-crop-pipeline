@@ -1,5 +1,5 @@
 import { DownloadOutlined } from "@ant-design/icons";
-import { Button, Card, Image, Typography } from "antd";
+import { Card, Flex, Image, Typography } from "antd";
 import type { CropResult } from "../types";
 
 const { Text } = Typography;
@@ -23,7 +23,7 @@ export function CropCard({ filename, crop }: CropCardProps) {
         </a>
       ]}
     >
-      <div className="flex flex-col gap-0.5">
+      <Flex vertical gap={2}>
         <Text strong>{crop.name}</Text>
         <Text type="secondary">
           {safeName} · {crop.width}x{crop.height} · L{crop.box.left} T{crop.box.top}
@@ -31,7 +31,7 @@ export function CropCard({ filename, crop }: CropCardProps) {
         {crop.outputPath && (
           <Text type="secondary" ellipsis>{crop.outputPath}</Text>
         )}
-      </div>
+      </Flex>
     </Card>
   );
 }

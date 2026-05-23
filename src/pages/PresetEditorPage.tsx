@@ -14,6 +14,7 @@ import {
   Card,
   Checkbox,
   Empty,
+  Flex,
   Input,
   Select,
   Space,
@@ -362,30 +363,30 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
   return (
     <Space orientation="vertical" size={12} style={{ width: "100%" }}>
       <Card size="small">
-        <div className="flex items-center justify-between gap-3">
+        <Flex align="center" justify="space-between" gap={12}>
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={onBack}>返回</Button>
-            <div className="flex flex-col">
+            <Flex vertical>
               <Title level={4} style={{ margin: 0 }}>{preset.name}</Title>
               <Text type="secondary">编辑元数据、裁切参数和训练策略</Text>
-            </div>
+            </Flex>
           </Space>
           <Tag color={currentStatus.color}>{currentStatus.label}</Tag>
-        </div>
+        </Flex>
       </Card>
 
-      <div className="grid gap-3 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "380px minmax(0, 1fr)" }}>
         <Card size="small" title="基础信息">
           <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-            <div className="flex flex-col gap-1">
+            <Flex vertical gap={4}>
               <Text type="secondary">名称</Text>
               <Input
                 value={preset.name}
                 onChange={(event) => onUpdate(preset.id, { name: event.target.value })}
               />
-            </div>
+            </Flex>
 
-            <div className="flex flex-col gap-1">
+            <Flex vertical gap={4}>
               <Text type="secondary">标签</Text>
               <Select
                 mode="tags"
@@ -398,9 +399,9 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
               <Text type="secondary">
                 小写字母/数字/连字符/下划线，最多 8 个
               </Text>
-            </div>
+            </Flex>
 
-            <div className="flex flex-col gap-1">
+            <Flex vertical gap={4}>
               <Text type="secondary">状态说明</Text>
               <TextArea
                 rows={3}
@@ -408,9 +409,9 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                 placeholder="样本不足、训练完成等状态说明"
                 onChange={(event) => onUpdate(preset.id, { note: event.target.value })}
               />
-            </div>
+            </Flex>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
               <NumberField
                 label="宽"
                 value={preset.width}
@@ -423,7 +424,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
               />
             </div>
 
-            <div className="flex flex-col gap-1">
+            <Flex vertical gap={4}>
               <Text type="secondary">裁切保护</Text>
               <Space>
                 <Checkbox
@@ -439,9 +440,9 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                   不裁手
                 </Checkbox>
               </Space>
-            </div>
+            </Flex>
 
-            <div className="flex flex-col gap-1">
+            <Flex vertical gap={4}>
               <Text type="secondary">适用视角</Text>
               <Space>
                 {viewAngles.map((viewAngle) => (
@@ -454,17 +455,17 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                   </Checkbox>
                 ))}
               </Space>
-            </div>
+            </Flex>
           </Space>
         </Card>
 
         <Card
           size="small"
           title={
-            <div className="flex flex-col gap-0.5">
+            <Flex vertical gap={2}>
               <Title level={5} style={{ margin: 0 }}>训练</Title>
               <Text type="secondary">上传原图并手动画裁切框，最少 5 组</Text>
-            </div>
+            </Flex>
           }
           extra={
             <Upload
@@ -481,7 +482,18 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
           }
         >
           <Space orientation="vertical" size={12} style={{ width: "100%" }}>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e6ebe6] bg-[#fafbfa] p-3">
+            <Flex
+              wrap
+              align="center"
+              justify="space-between"
+              gap={12}
+              style={{
+                borderRadius: 6,
+                border: "1px solid #e6ebe6",
+                background: "#fafbfa",
+                padding: 12
+              }}
+            >
               <Space size={12}>
                 <Badge count={`${trainSamples.length}/5`} showZero color={trainSamples.length >= 5 ? "#1c6b62" : "#fa8c16"}>
                   <Text strong>训练样本</Text>
@@ -517,9 +529,9 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                   {isAnalyzing ? "识别中" : "开始训练"}
                 </Button>
               </Space>
-            </div>
+            </Flex>
 
-            <div className="grid gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "260px minmax(0, 1fr)" }}>
               <Card
                 size="small"
                 type="inner"
@@ -528,40 +540,45 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                 styles={{ body: { padding: 0, maxHeight: 520, overflow: "auto" } }}
               >
                 {samples.length === 0 ? (
-                  <div className="p-3">
+                  <div style={{ padding: 12 }}>
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="上传样本后从这里选择" />
                   </div>
                 ) : (
-                  samples.map((sample) => (
-                    <button
-                      key={sample.id}
-                      type="button"
-                      onClick={() => setSelectedSampleId(sample.id)}
-                      className={`flex w-full items-center gap-2 border-b border-[#f0f1ed] px-2 py-2 text-left text-xs last:border-b-0 ${
-                        selectedSample?.id === sample.id ? "bg-[#e3efed]" : "hover:bg-[#f7f8f5]"
-                      }`}
-                    >
-                      <img src={sample.previewUrl} alt={sample.filename} className="h-10 w-10 rounded object-cover" />
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <Text strong ellipsis>{sample.filename}</Text>
-                        <Space size={4}>
-                          <Tag
-                            color={sample.confirmed ? "green" : sample.cropPreviewUrl ? "blue" : "default"}
-                            style={{ marginInlineEnd: 0 }}
-                          >
-                            {sample.confirmed
-                              ? `已确认 · ${sample.set === "train" ? "训练" : "测试"}`
-                              : sample.cropPreviewUrl
-                                ? "已预览"
-                                : "待处理"}
-                          </Tag>
-                          <Text type="secondary">
-                            {viewAngleLabels[sample.viewAngle ?? "front"]} · {providerLabel(sample.poseProvider)}
-                          </Text>
-                        </Space>
-                      </div>
-                    </button>
-                  ))
+                  samples.map((sample) => {
+                    const isActive = selectedSample?.id === sample.id;
+                    return (
+                      <button
+                        key={sample.id}
+                        type="button"
+                        onClick={() => setSelectedSampleId(sample.id)}
+                        className={`list-row-button with-image${isActive ? " is-active" : ""}`}
+                      >
+                        <img
+                          src={sample.previewUrl}
+                          alt={sample.filename}
+                          style={{ height: 40, width: 40, borderRadius: 4, objectFit: "cover" }}
+                        />
+                        <Flex vertical gap={2} style={{ minWidth: 0, flex: 1 }}>
+                          <Text strong ellipsis>{sample.filename}</Text>
+                          <Space size={4}>
+                            <Tag
+                              color={sample.confirmed ? "green" : sample.cropPreviewUrl ? "blue" : "default"}
+                              style={{ marginInlineEnd: 0 }}
+                            >
+                              {sample.confirmed
+                                ? `已确认 · ${sample.set === "train" ? "训练" : "测试"}`
+                                : sample.cropPreviewUrl
+                                  ? "已预览"
+                                  : "待处理"}
+                            </Tag>
+                            <Text type="secondary">
+                              {viewAngleLabels[sample.viewAngle ?? "front"]} · {providerLabel(sample.poseProvider)}
+                            </Text>
+                          </Space>
+                        </Flex>
+                      </button>
+                    );
+                  })
                 )}
               </Card>
 

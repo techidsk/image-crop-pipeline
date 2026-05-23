@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import { CheckOutlined, EyeInvisibleOutlined, EyeOutlined, ScanOutlined } from "@ant-design/icons";
-import { Button, Card, Image as AntImage, Segmented, Space, Tag, Typography } from "antd";
+import { Button, Card, Flex, Image as AntImage, Segmented, Space, Tag, Typography } from "antd";
 import { NumberField } from "./NumberField";
 import type { CropDragState, ResizeHandle, TrainingSample } from "../types";
 import {
@@ -223,14 +223,20 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
 
   return (
     <Card size="small" styles={{ body: { padding: 12 } }}>
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="overflow-hidden rounded-md border border-[#e6ebe6] bg-[#f4f6f5]">
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "minmax(0, 1fr) 280px" }}>
+        <div
+          style={{
+            overflow: "hidden",
+            borderRadius: 6,
+            border: "1px solid #e6ebe6",
+            background: "#f4f6f5"
+          }}
+        >
           <canvas
             ref={canvasRef}
             width={sample.source.width}
             height={sample.source.height}
-            className="block w-full"
-            style={{ touchAction: "none" }}
+            style={{ display: "block", width: "100%", touchAction: "none" }}
             role="img"
             aria-label={`${sample.filename} crop editor`}
             onPointerDown={startDraw}
@@ -264,7 +270,7 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
           >
             {showPose ? "隐藏 OpenPose" : "显示 OpenPose"}
           </Button>
-          <div className="flex flex-col gap-1">
+          <Flex vertical gap={4}>
             <Text type="secondary">样本用途</Text>
             <Segmented
               size="small"
@@ -276,7 +282,7 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
               ]}
               onChange={(value) => onUpdate(sample.id, { set: value as "train" | "test" })}
             />
-          </div>
+          </Flex>
           <Space size={4} style={{ width: "100%" }}>
             <Button size="small" icon={<ScanOutlined />} onClick={() => onPreview(sample)} block>
               预览
@@ -299,7 +305,7 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
               style={{ borderRadius: 6, objectFit: "contain" }}
             />
           )}
-          <div className="grid grid-cols-2 gap-2">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
             <NumberField label="裁切 X" value={Math.round(sample.crop.left)} onChange={(left) => updateCrop({ left })} />
             <NumberField label="裁切 Y" value={Math.round(sample.crop.top)} onChange={(top) => updateCrop({ top })} />
             <NumberField label="裁切宽" value={Math.round(sample.crop.width)} onChange={(width) => updateCrop({ width })} />

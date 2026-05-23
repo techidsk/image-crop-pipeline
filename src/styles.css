@@ -1,7 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 html,
 body,
 #root {
@@ -14,4 +10,47 @@ body,
 #root {
   display: flex;
   flex-direction: column;
+}
+
+.list-row-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #f0f1ed;
+  padding: 8px 12px;
+  font-size: 12px;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.list-row-button:last-child {
+  border-bottom: 0;
+}
+
+.list-row-button:hover {
+  background: #f7f8f5;
+}
+
+.list-row-button.is-active,
+.list-row-button.is-active:hover {
+  background: #e3efed;
+}
+
+.list-row-button.with-image {
+  justify-content: flex-start;
+  padding: 8px;
+  gap: 8px;
+}
+
+.row-highlight > td {
+  background: #e3efed !important;
+}
+
+.row-faded {
+  opacity: 0.55;
 }

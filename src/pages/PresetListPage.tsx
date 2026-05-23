@@ -9,7 +9,7 @@ import {
   StopOutlined,
   UploadOutlined
 } from "@ant-design/icons";
-import { App, Button, Card, Drawer, Empty, Image, Segmented, Space, Table, Tag, Typography, Upload } from "antd";
+import { App, Button, Card, Drawer, Empty, Flex, Image, Segmented, Space, Table, Tag, Typography, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
 import { viewAngleLabels } from "../constants";
@@ -75,10 +75,10 @@ export function PresetListPage({
       dataIndex: "name",
       key: "name",
       render: (_, preset) => (
-        <div className="flex flex-col">
+        <Flex vertical>
           <Text strong>{preset.name}</Text>
           <Text type="secondary">{preset.id}</Text>
-        </div>
+        </Flex>
       )
     },
     {
@@ -184,10 +184,10 @@ export function PresetListPage({
     <>
       <Card
         title={
-          <div className="flex flex-col gap-0.5">
+          <Flex vertical gap={2}>
             <Title level={5} style={{ margin: 0 }}>预设管理</Title>
             <Text type="secondary">筛选、测试和进入单个预设编辑</Text>
-          </div>
+          </Flex>
         }
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
@@ -225,7 +225,7 @@ export function PresetListPage({
             columns={columns}
             dataSource={visiblePresets}
             pagination={{ pageSize: 20, hideOnSinglePage: true, size: "small" }}
-            rowClassName={(preset) => ((preset.status ?? "draft") === "archived" ? "opacity-55" : "")}
+            rowClassName={(preset) => ((preset.status ?? "draft") === "archived" ? "row-faded" : "")}
             locale={{ emptyText: <Empty description="没有匹配的预设" /> }}
           />
         </Space>
@@ -363,11 +363,11 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
       {compareResults ? (
         <Card size="small" title="对比结果">
           <Image.PreviewGroup>
-            <div className="grid grid-cols-2 gap-3">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
               {Object.entries(compareResults).map(([provider, response]) => {
                 const compareCrop = response.crops[0];
                 return (
-                  <div key={provider} className="flex flex-col gap-1">
+                  <Flex key={provider} vertical gap={4}>
                     <Text strong>{providerLabel(provider as PoseProviderId)}</Text>
                     {compareCrop ? (
                       <>
@@ -383,7 +383,7 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
                     ) : (
                       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无结果" />
                     )}
-                  </div>
+                  </Flex>
                 );
               })}
             </div>
@@ -391,7 +391,7 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
         </Card>
       ) : crop ? (
         <Card size="small" title={crop.name}>
-          <div className="flex flex-col gap-2">
+          <Flex vertical gap={8}>
             <Image
               src={`data:image/png;base64,${crop.image}`}
               alt={crop.name}
@@ -403,7 +403,7 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
             <Text type="secondary">
               BBox L{crop.box.left} T{crop.box.top} R{crop.box.right} B{crop.box.bottom}
             </Text>
-          </div>
+          </Flex>
         </Card>
       ) : (
         <Empty description="运行测试后查看裁切结果" />

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { InboxOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { App, Button, Card, Empty, Space, Statistic, Tag, Typography, Upload } from "antd";
+import { App, Button, Card, Empty, Flex, Space, Statistic, Tag, Typography, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { viewAngleLabels } from "../constants";
 import type { PoseAnalysis, PoseKeypoint, PoseProviderId, ViewAngle } from "../types";
@@ -92,14 +92,14 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+    <div style={{ display: "grid", gap: 16, gridTemplateColumns: "380px minmax(0, 1fr)" }}>
       <Card
         size="small"
         title={
-          <div className="flex flex-col gap-0.5">
+          <Flex vertical gap={2}>
             <Title level={5} style={{ margin: 0 }}>视角测试</Title>
             <Text type="secondary">上传图片并识别正面、侧面、背面</Text>
-          </div>
+          </Flex>
         }
       >
         <Space orientation="vertical" size={12} style={{ width: "100%" }}>
@@ -126,13 +126,13 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
             <Button icon={<ReloadOutlined />} onClick={() => replacePreviews([])}>清空</Button>
           </Space>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
             <Statistic title="图片" value={previews.length} />
             <Statistic title="已识别" value={results.length} />
-            <div className="flex flex-col">
+            <Flex vertical>
               <Text type="secondary">引擎</Text>
               <Text strong>{providerLabel(poseProvider)}</Text>
-            </div>
+            </Flex>
           </div>
 
           {previews.length > 0 && (
@@ -144,12 +144,12 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
                   <button
                     key={`${preview.file.name}-${preview.file.lastModified}`}
                     type="button"
-                    className={`flex w-full items-center justify-between border-b border-[#f0f1ed] px-3 py-2 text-left text-xs last:border-b-0 ${
-                      activeIndex === index ? "bg-[#e3efed]" : "hover:bg-[#f7f8f5]"
-                    }`}
+                    className={`list-row-button${activeIndex === index ? " is-active" : ""}`}
                     onClick={() => setActiveIndex(index)}
                   >
-                    <span className="truncate">{preview.file.name}</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {preview.file.name}
+                    </span>
                     {viewAngle ? (
                       <Tag color={VIEW_COLORS[viewAngle]} style={{ marginInlineEnd: 0 }}>
                         {viewAngleLabels[viewAngle]}
@@ -167,7 +167,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
         </Space>
       </Card>
 
-      <div className="flex flex-col gap-3">
+      <Flex vertical gap={12}>
         <Card size="small" styles={{ body: { minHeight: 420, padding: 12 } }}>
           {activePreview ? (
             <PosePreview previewUrl={activePreview.url} result={activeResult} />
@@ -187,7 +187,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
               <Text type="secondary">
                 原图 {activeResult.source.width}x{activeResult.source.height} · {activeResult.keypoints.length} 个节点
               </Text>
-              <div className="grid grid-cols-3 gap-3">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
                 <Statistic
                   title="脸部点"
                   value={countVisible(activeResult, ["nose", "left_eye", "right_eye", "left_ear", "right_ear"])}
@@ -204,7 +204,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
             </Space>
           </Card>
         )}
-      </div>
+      </Flex>
     </div>
   );
 }
@@ -212,10 +212,14 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
 function PosePreview({ previewUrl, result }: { previewUrl: string; result?: PoseAnalysis }) {
   const viewAngle = result ? resolvedViewAngle(result) : null;
   return (
-    <div className="relative inline-block max-w-full">
-      <img src={previewUrl} alt={result?.filename ?? "View test preview"} className="max-h-[520px] max-w-full" />
+    <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
+      <img
+        src={previewUrl}
+        alt={result?.filename ?? "View test preview"}
+        style={{ maxHeight: 520, maxWidth: "100%" }}
+      />
       {result && viewAngle && (
-        <div className="absolute left-3 top-3">
+        <div style={{ position: "absolute", left: 12, top: 12 }}>
           <Tag color={VIEW_COLORS[viewAngle]} style={{ padding: "2px 10px" }}>
             识别结论：{viewAngleLabels[viewAngle]}
           </Tag>
@@ -227,8 +231,15 @@ function PosePreview({ previewUrl, result }: { previewUrl: string; result?: Pose
           <span
             key={point.name}
             title={`${point.name} ${point.confidence.toFixed(2)}`}
-            className="pointer-events-none absolute h-2 w-2 -translate-x-1 -translate-y-1 rounded-full border border-white bg-[#1c6b62]"
             style={{
+              pointerEvents: "none",
+              position: "absolute",
+              height: 8,
+              width: 8,
+              transform: "translate(-4px, -4px)",
+              borderRadius: "50%",
+              border: "1px solid #ffffff",
+              background: "#1c6b62",
               left: `${(point.x / result.source.width) * 100}%`,
               top: `${(point.y / result.source.height) * 100}%`
             }}
