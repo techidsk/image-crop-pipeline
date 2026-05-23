@@ -229,14 +229,26 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
             overflow: "hidden",
             borderRadius: 6,
             border: "1px solid #e6ebe6",
-            background: "#f4f6f5"
+            background: "#f4f6f5",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            maxHeight: "calc(100vh - 320px)",
+            minHeight: 240
           }}
         >
           <canvas
             ref={canvasRef}
             width={sample.source.width}
             height={sample.source.height}
-            style={{ display: "block", width: "100%", touchAction: "none" }}
+            style={{
+              display: "block",
+              maxWidth: "100%",
+              maxHeight: "100%",
+              width: "auto",
+              height: "auto",
+              touchAction: "none"
+            }}
             role="img"
             aria-label={`${sample.filename} crop editor`}
             onPointerDown={startDraw}
@@ -245,7 +257,7 @@ export function TrainingCard({ aspectRatio, sample, onConfirm, onPreview, onUpda
             onPointerCancel={finishDraw}
           />
         </div>
-        <Space orientation="vertical" size={10} style={{ width: "100%" }}>
+        <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <div>
             <Text strong>{sample.filename}</Text>
             <div>

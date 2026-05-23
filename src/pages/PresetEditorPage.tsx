@@ -9,7 +9,6 @@ import {
 import {
   App,
   Alert,
-  Badge,
   Button,
   Card,
   Checkbox,
@@ -361,7 +360,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
   const currentStatus = STATUS_META[preset.status ?? "draft"];
 
   return (
-    <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
       <Card size="small">
         <Flex align="center" justify="space-between" gap={12}>
           <Space>
@@ -377,7 +376,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
 
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "380px minmax(0, 1fr)" }}>
         <Card size="small" title="基础信息">
-          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Flex vertical gap={4}>
               <Text type="secondary">名称</Text>
               <Input
@@ -481,7 +480,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             </Upload>
           }
         >
-          <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
             <Flex
               wrap
               align="center"
@@ -494,11 +493,15 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                 padding: 12
               }}
             >
-              <Space size={12}>
-                <Badge count={`${trainSamples.length}/5`} showZero color={trainSamples.length >= 5 ? "#1c6b62" : "#fa8c16"}>
-                  <Text strong>训练样本</Text>
-                </Badge>
-                <Text type="secondary">测试集 {testSamples.length} 组</Text>
+              <Space size={8} align="center">
+                <Text strong>训练样本</Text>
+                <Tag
+                  color={trainSamples.length >= 5 ? "green" : "orange"}
+                  style={{ marginInlineEnd: 0 }}
+                >
+                  {trainSamples.length}/5
+                </Tag>
+                <Text type="secondary">· 测试集 {testSamples.length} 组</Text>
               </Space>
               <Space wrap>
                 <Button
@@ -661,7 +664,7 @@ function TrainingDiagnosticsPanel({ diagnostics }: { diagnostics: TrainingDiagno
 
   return (
     <Card size="small" type="inner" title="偏差诊断" extra={<Text type="secondary">阈值 {formatMetric(diagnostics.threshold)} · 过滤 {rejected} 组</Text>}>
-      <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+      <Space direction="vertical" size={12} style={{ width: "100%" }}>
         {diagnostics.center && (
           <Alert
             type="info"
