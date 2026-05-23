@@ -7,8 +7,28 @@
       "default"
     ],
     "description": "按当前可用预设批量生成运营素材。",
-    "presetIds": [],
-    "presets": [],
+    "presetIds": [
+      "portrait-1800-2000",
+      "upper-square-1600",
+      "preset-1778693560160"
+    ],
+    "presets": [
+      {
+        "presetId": "portrait-1800-2000",
+        "enabled": true,
+        "alias": ""
+      },
+      {
+        "presetId": "upper-square-1600",
+        "enabled": true,
+        "alias": ""
+      },
+      {
+        "presetId": "preset-1778693560160",
+        "enabled": true,
+        "alias": ""
+      }
+    ],
     "status": "draft"
   },
   {
