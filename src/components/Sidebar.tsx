@@ -101,31 +101,14 @@ export function Sidebar({
     >
       <Flex vertical style={{ height: "100%" }}>
         <Flex
-          align="center"
-          gap={12}
-          style={{ borderBottom: "1px solid #eef1ee", padding: "16px" }}
+          vertical
+          gap={2}
+          style={{ borderBottom: "1px solid #eef1ee", padding: "16px", lineHeight: 1.25 }}
         >
-          <div
-            style={{
-              display: "grid",
-              placeItems: "center",
-              height: 40,
-              width: 40,
-              borderRadius: 6,
-              background: "#1c6b62",
-              color: "#ffffff",
-              fontWeight: 700
-            }}
-          >
-            OP
-          </div>
-          <Flex vertical style={{ lineHeight: 1.25 }}>
-            <Text strong>Crop Pipeline</Text>
-            <Text type="secondary">Python 工作流 · React 控制台</Text>
-            <Text type="secondary" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-              {__APP_VERSION__} · {__APP_COMMIT__}
-            </Text>
-          </Flex>
+          <Text strong>批量工具</Text>
+          <Text type="secondary" style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+            {__APP_VERSION__} · {__APP_COMMIT__}
+          </Text>
         </Flex>
 
         <Menu
