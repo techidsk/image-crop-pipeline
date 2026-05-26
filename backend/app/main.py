@@ -7,7 +7,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from io import BytesIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
@@ -132,6 +132,45 @@ def safe_filename(value: str) -> str:
 
 
 ORIGINALS_DIRNAME = "_originals"
+OUTPUT_LAYOUT_BY_PRESET = "by_preset"
+OUTPUT_LAYOUT_SINGLE_FOLDER = "single_folder"
+
+
+def normalize_relative_path(value: str | None, fallback: str = "image") -> str:
+    raw = (value or fallback or "image").replace("\\", "/")
+    path = PurePosixPath(raw)
+    parts = [part for part in path.parts if part not in ("", ".", "..")]
+    if not parts:
+        parts = [fallback or "image"]
+    return "/".join(parts)
+
+
+def safe_dirname(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value)
+    return safe or "folder"
+
+
+def source_folder_name(relative_path: str) -> str | None:
+    parts = PurePosixPath(normalize_relative_path(relative_path)).parts
+    if len(parts) < 2:
+        return None
+    return safe_dirname(parts[0])
+
+
+def output_source_name(relative_path: str) -> str:
+    parts = list(PurePosixPath(normalize_relative_path(relative_path)).parts)
+    if len(parts) > 1:
+        parts = parts[1:]
+    stem_parts = [safe_dirname(part) for part in parts[:-1]]
+    stem_parts.append(safe_filename(parts[-1] if parts else "image"))
+    return "_".join(part for part in stem_parts if part) or "image"
+
+
+def resolve_output_layout(value: str | None) -> str:
+    layout = (value or OUTPUT_LAYOUT_BY_PRESET).strip().lower()
+    if layout not in (OUTPUT_LAYOUT_BY_PRESET, OUTPUT_LAYOUT_SINGLE_FOLDER):
+        raise HTTPException(status_code=400, detail="Unsupported output layout")
+    return layout
 
 
 def archive_originals_dir(job_dir: Path) -> Path:
@@ -145,9 +184,13 @@ def archive_originals(job_dir: Path, uploaded: list[tuple[str, bytes]]) -> None:
     except OSError:
         return
     for filename, data in uploaded:
-        safe_name = Path(filename or "image").name or "image"
+        relative = normalize_relative_path(filename)
+        safe_parts = [safe_dirname(part) for part in PurePosixPath(relative).parts[:-1]]
+        safe_name = Path(PurePosixPath(relative).name or "image").name or "image"
         try:
-            (target / safe_name).write_bytes(data)
+            output_path = target.joinpath(*safe_parts, safe_name)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(data)
         except OSError:
             continue
 
@@ -158,7 +201,10 @@ def load_archived_originals(job: BatchJob) -> list[tuple[str, bytes]]:
         return []
     items: list[tuple[str, bytes]] = []
     for image in job.images:
-        candidate = originals_dir / Path(image.filename or "image").name
+        relative = normalize_relative_path(image.filename)
+        safe_parts = [safe_dirname(part) for part in PurePosixPath(relative).parts[:-1]]
+        safe_name = Path(PurePosixPath(relative).name or "image").name or "image"
+        candidate = originals_dir.joinpath(*safe_parts, safe_name)
         if not candidate.exists() or not candidate.is_file():
             continue
         try:
@@ -396,18 +442,27 @@ async def process_upload_to_output_dir(
     output_dir: Path,
     job_id: str,
     provider_name: str | None = None,
+    source_path: str | None = None,
+    output_layout: str = OUTPUT_LAYOUT_BY_PRESET,
 ) -> ProcessResponse:
     response = await process_upload(image, crop_presets, provider_name)
-    source_name = safe_filename(response.filename or image.filename or "image")
+    relative_source_path = source_path or response.filename or image.filename or "image"
+    source_name = output_source_name(relative_source_path)
+    group_name = source_folder_name(relative_source_path)
     next_crops: list[CropResult] = []
     for crop in response.crops:
         preset_subdir = safe_filename(crop.presetId)
-        preset_dir = output_dir / preset_subdir
-        preset_dir.mkdir(parents=True, exist_ok=True)
+        crop_dir = output_dir
+        if group_name:
+            crop_dir = crop_dir / group_name
+        if output_layout == OUTPUT_LAYOUT_BY_PRESET:
+            crop_dir = crop_dir / preset_subdir
+        crop_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{source_name}_{safe_filename(crop.presetId)}.png"
-        output_path = preset_dir / filename
+        output_path = crop_dir / filename
         output_path.write_bytes(base64.b64decode(crop.image))
-        image_url = f"/api/batch-jobs/{job_id}/files/{preset_subdir}/{filename}"
+        relative_output_path = output_path.relative_to(output_dir).as_posix()
+        image_url = f"/api/batch-jobs/{job_id}/files/{relative_output_path}"
         next_crops.append(
             crop.model_copy(
                 update={
@@ -553,6 +608,8 @@ async def run_batch_job(
     scene_id: str = Form(...),
     output_dir: str = Form(...),
     pose_provider: str = Form("rtmw"),
+    image_paths: list[str] | None = Form(None),
+    output_layout: str = Form(OUTPUT_LAYOUT_BY_PRESET),
 ) -> BatchJobResponse:
     job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
     created_at = datetime.now().isoformat(timespec="seconds")
@@ -562,6 +619,7 @@ async def run_batch_job(
         raise HTTPException(status_code=404, detail="Scene not found")
 
     actual_provider = resolve_pose_provider_name(pose_provider)
+    actual_output_layout = resolve_output_layout(output_layout)
     presets_by_id = {preset.id: preset for preset in load_presets()}
     bound_ids = [
         binding.presetId
@@ -583,11 +641,13 @@ async def run_batch_job(
                 createdAt=created_at,
                 images=[
                     BatchJobImage(
-                        filename=image.filename or "image",
+                        filename=normalize_relative_path(
+                            image_paths[index] if image_paths and index < len(image_paths) else image.filename
+                        ),
                         outputs=0,
                         error="场景没有可用预设，请先在场景管理中绑定预设。",
                     )
-                    for image in images
+                    for index, image in enumerate(images)
                 ],
             )
         )
@@ -612,11 +672,13 @@ async def run_batch_job(
                 createdAt=created_at,
                 images=[
                     BatchJobImage(
-                        filename=image.filename or "image",
+                        filename=normalize_relative_path(
+                            image_paths[index] if image_paths and index < len(image_paths) else image.filename
+                        ),
                         outputs=0,
                         error=f"输出目录不可写：{exc}",
                     )
-                    for image in images
+                    for index, image in enumerate(images)
                 ],
             )
         )
@@ -639,20 +701,25 @@ async def run_batch_job(
                 createdAt=created_at,
                 images=[
                     BatchJobImage(
-                        filename=image.filename or "image",
+                        filename=normalize_relative_path(
+                            image_paths[index] if image_paths and index < len(image_paths) else image.filename
+                        ),
                         outputs=0,
                         error=f"任务目录不可写：{exc}",
                     )
-                    for image in images
+                    for index, image in enumerate(images)
                 ],
             )
         )
         return BatchJobResponse(job=job, images=[])
 
     uploaded: list[tuple[str, bytes]] = []
-    for image in images:
+    for index, image in enumerate(images):
         raw = await image.read()
-        uploaded.append((image.filename or "image", raw))
+        filename = normalize_relative_path(
+            image_paths[index] if image_paths and index < len(image_paths) else image.filename
+        )
+        uploaded.append((filename, raw))
     archive_originals(job_dir, uploaded)
 
     results: list[ProcessResponse] = []
@@ -661,7 +728,13 @@ async def run_batch_job(
         upload = UploadFile(file=BytesIO(raw), filename=filename)
         try:
             result = await process_upload_to_output_dir(
-                upload, crop_presets, job_dir, job_id, actual_provider
+                upload,
+                crop_presets,
+                job_dir,
+                job_id,
+                actual_provider,
+                source_path=filename,
+                output_layout=actual_output_layout,
             )
             results.append(result)
             image_reports.append(
@@ -717,12 +790,14 @@ async def _batch_job_events(
     scene_id: str,
     output_dir: str,
     pose_provider: str,
+    output_layout: str = OUTPUT_LAYOUT_BY_PRESET,
 ):
     job_id = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid4().hex[:6]
     created_at = datetime.now().isoformat(timespec="seconds")
     total = len(uploaded)
     try:
         actual_provider = resolve_pose_provider_name(pose_provider)
+        actual_output_layout = resolve_output_layout(output_layout)
         scenes = load_scenes()
         scene = next((item for item in scenes if item.id == scene_id), None)
         if scene is None:
@@ -820,7 +895,13 @@ async def _batch_job_events(
             try:
                 upload = UploadFile(file=BytesIO(raw), filename=filename)
                 result = await process_upload_to_output_dir(
-                    upload, crop_presets, job_dir, job_id, actual_provider
+                    upload,
+                    crop_presets,
+                    job_dir,
+                    job_id,
+                    actual_provider,
+                    source_path=filename,
+                    output_layout=actual_output_layout,
                 )
                 results.append(result)
                 report = BatchJobImage(filename=filename, outputs=len(result.crops))
@@ -907,12 +988,22 @@ async def run_batch_job_stream(
     scene_id: str = Form(...),
     output_dir: str = Form(...),
     pose_provider: str = Form("rtmw"),
+    image_paths: list[str] | None = Form(None),
+    output_layout: str = Form(OUTPUT_LAYOUT_BY_PRESET),
 ) -> StreamingResponse:
     # StreamingResponse 消费生成器时 FastAPI 已经关闭了上传文件的临时文件，
     # 因此必须在返回前把图片字节读进内存。
-    uploaded = [(image.filename or "image", await image.read()) for image in images]
+    uploaded = [
+        (
+            normalize_relative_path(
+                image_paths[index] if image_paths and index < len(image_paths) else image.filename
+            ),
+            await image.read(),
+        )
+        for index, image in enumerate(images)
+    ]
     return StreamingResponse(
-        _batch_job_events(uploaded, scene_id, output_dir, pose_provider),
+        _batch_job_events(uploaded, scene_id, output_dir, pose_provider, output_layout),
         media_type="application/x-ndjson",
     )
 

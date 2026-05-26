@@ -3,6 +3,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   DownloadOutlined,
+  EyeOutlined,
   FolderOpenOutlined,
   InboxOutlined,
   PlayCircleOutlined,
@@ -17,7 +18,9 @@ import {
   Empty,
   Flex,
   Input,
+  Modal,
   Progress,
+  Radio,
   Select,
   Space,
   Statistic,
@@ -39,6 +42,10 @@ import type {
 } from "../types";
 
 const { Title, Text } = Typography;
+const JOB_ID_PLACEHOLDER = "<任务ID>";
+
+type UploadFileWithPath = File & { webkitRelativePath?: string };
+type OutputLayout = "by_preset" | "single_folder";
 
 type BatchJobsPageProps = {
   scenes: CropScene[];
@@ -86,18 +93,25 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
   const activeScenes = scenes.filter((scene) => scene.status !== "archived");
   const [sceneId, setSceneId] = useState(activeScenes[0]?.id ?? "");
   const [outputDir, setOutputDir] = useState("outputs");
+  const [outputLayout, setOutputLayout] = useState<OutputLayout>("by_preset");
   const [files, setFiles] = useState<File[]>([]);
   const [resultsByJob, setResultsByJob] = useState<Record<string, ProcessResponse[]>>({});
   const [selectedJobId, setSelectedJobId] = useState("");
   const [activeResult, setActiveResult] = useState(0);
   const [progress, setProgress] = useState<RunProgress | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const selectedScene = activeScenes.find((scene) => scene.id === sceneId) ?? activeScenes[0];
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? jobs[0];
   const selectedResults = selectedJob ? resultsByJob[selectedJob.id] ?? [] : [];
   const active = selectedResults[activeResult];
   const rerunnableFiles = useMemo(() => filesForRerun(files, selectedJob), [files, selectedJob]);
+  const inputFolders = useMemo(() => getInputFolders(files), [files]);
+  const outputPreviewRows = useMemo(
+    () => buildOutputPreviewRows(files, outputDir, outputLayout, selectedScene?.presetIds.length ?? 0),
+    [files, outputDir, outputLayout, selectedScene?.presetIds.length]
+  );
 
   useEffect(() => {
     if (!sceneId && activeScenes[0]) setSceneId(activeScenes[0].id);
@@ -111,7 +125,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
     () =>
       files.map((file, index) => ({
         uid: `${file.name}-${file.lastModified}-${index}`,
-        name: file.name,
+        name: getFileRelativePath(file),
         size: file.size,
         status: "done" as const
       })),
@@ -136,7 +150,8 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
     await runStream("/api/batch-jobs/run-stream", files, {
       scene_id: selectedScene.id,
       output_dir: outputDir,
-      pose_provider: poseProvider
+      pose_provider: poseProvider,
+      output_layout: outputLayout
     });
   };
 
@@ -202,7 +217,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
     setProgress(null);
     try {
       const formData = new FormData();
-      uploadFiles.forEach((file) => formData.append("images", file));
+      uploadFiles.forEach((file) => {
+        formData.append("images", file);
+        formData.append("image_paths", getFileRelativePath(file));
+      });
       Object.entries(fields).forEach(([key, value]) => formData.append(key, value));
       const response = await fetch(url, { method: "POST", body: formData });
       if (!response.ok || !response.body) {
@@ -358,6 +376,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
     },
     onRemove: () => replaceFiles([])
   };
+  const folderUploadProps = {
+    ...uploadProps,
+    directory: true
+  };
 
   const jobColumns: ColumnsType<BatchJob> = [
     {
@@ -489,13 +511,43 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
               placeholder="默认 outputs；服务端部署时建议保持相对路径"
             />
           </Flex>
+          <Flex vertical gap={4}>
+            <Flex align="center" justify="space-between">
+              <Text type="secondary">输出形式</Text>
+              {inputFolders.length > 1 && (
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<EyeOutlined />}
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  预览输出文件夹
+                </Button>
+              )}
+            </Flex>
+            <Radio.Group
+              block
+              optionType="button"
+              buttonStyle="solid"
+              value={outputLayout}
+              onChange={(event) => setOutputLayout(event.target.value)}
+              options={[
+                { label: "按预设分组", value: "by_preset" },
+                { label: "统一汇总", value: "single_folder" }
+              ]}
+            />
+          </Flex>
 
           <Upload.Dragger {...uploadProps}>
             <p className="ant-upload-drag-icon"><InboxOutlined /></p>
             <p className="ant-upload-text">
               {files.length === 0 ? "上传多张原图" : `${files.length} 张原图待处理`}
             </p>
+            <p className="ant-upload-hint">可拖拽图片或文件夹；多文件夹会保留最外层文件夹名</p>
           </Upload.Dragger>
+          <Upload {...folderUploadProps}>
+            <Button icon={<FolderOpenOutlined />}>选择文件夹</Button>
+          </Upload>
 
           <Space>
             <Button
@@ -537,10 +589,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
 
           {files.length > 0 && (
             <Card size="small" type="inner" title="文件列表" styles={{ body: { padding: 0, maxHeight: 200, overflow: "auto" } }}>
-              {files.map((file) => (
-                <div key={`${file.name}-${file.lastModified}`} className="list-row-button" style={{ cursor: "default" }}>
+              {files.map((file, index) => (
+                <div key={`${getFileRelativePath(file)}-${file.lastModified}-${index}`} className="list-row-button" style={{ cursor: "default" }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {file.name}
+                    {getFileRelativePath(file)}
                   </span>
                   <Text type="secondary">{Math.round(file.size / 1024)} KB</Text>
                 </div>
@@ -549,6 +601,30 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
           )}
         </Space>
       </Card>
+      <Modal
+        title="输出文件夹预览"
+        open={previewOpen}
+        footer={null}
+        width={720}
+        onCancel={() => setPreviewOpen(false)}
+      >
+        <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+          <Text type="secondary">
+            实际任务会把 {JOB_ID_PLACEHOLDER} 替换为本次任务编号。
+          </Text>
+          <Table
+            rowKey="folder"
+            size="small"
+            pagination={false}
+            columns={[
+              { title: "输入文件夹", dataIndex: "folder", key: "folder", width: 180 },
+              { title: "输出位置", dataIndex: "path", key: "path", render: (value: string) => <Text copyable ellipsis>{value}</Text> },
+              { title: "预计输出", dataIndex: "count", key: "count", width: 100 }
+            ]}
+            dataSource={outputPreviewRows}
+          />
+        </Space>
+      </Modal>
 
       <Flex vertical gap={12}>
         <Card
@@ -779,5 +855,59 @@ function filesForRerun(files: File[], job?: BatchJob): File[] {
       .filter((image: BatchJobImage) => image.error || image.reviewStatus === "rejected")
       .map((image) => image.filename)
   );
-  return files.filter((file) => targets.has(file.name));
+  return files.filter((file) => targets.has(getFileRelativePath(file)) || targets.has(file.name));
+}
+
+function getFileRelativePath(file: File): string {
+  const relativePath = (file as UploadFileWithPath).webkitRelativePath;
+  return normalizeUploadPath(relativePath || file.name);
+}
+
+function normalizeUploadPath(value: string): string {
+  return value
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((part: string) => part && part !== "." && part !== "..")
+    .join("/") || "image";
+}
+
+function getInputFolders(files: File[]): string[] {
+  const folders = new Set<string>();
+  files.forEach((file) => {
+    const parts = getFileRelativePath(file).split("/");
+    if (parts.length > 1) folders.add(parts[0]);
+  });
+  return [...folders].sort((left, right) => left.localeCompare(right));
+}
+
+function buildOutputPreviewRows(
+  files: File[],
+  outputDir: string,
+  outputLayout: OutputLayout,
+  presetCount: number
+): Array<{ folder: string; path: string; count: number }> {
+  const counts = new Map<string, number>();
+  files.forEach((file) => {
+    const parts = getFileRelativePath(file).split("/");
+    const folder = parts.length > 1 ? parts[0] : "散图";
+    counts.set(folder, (counts.get(folder) ?? 0) + 1);
+  });
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([folder, fileCount]) => {
+      const base = joinDisplayPath(outputDir || "outputs", JOB_ID_PLACEHOLDER);
+      const groupPath = folder === "散图" ? base : joinDisplayPath(base, folder);
+      return {
+        folder,
+        path: outputLayout === "single_folder" ? groupPath : joinDisplayPath(groupPath, "<预设ID>"),
+        count: fileCount * presetCount
+      };
+    });
+}
+
+function joinDisplayPath(...parts: string[]): string {
+  return parts
+    .map((part) => part.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
 }
