@@ -339,7 +339,11 @@ def make_crop(image: Image.Image, pose: Pose, preset: CropPreset) -> CropResult:
     crop = image.crop((left, top, right, bottom)).resize((preset.width, preset.height), Image.Resampling.LANCZOS)
 
     buffer = BytesIO()
-    crop.save(buffer, format="PNG")
+    save_kwargs = {}
+    icc_profile = image.info.get("icc_profile")
+    if icc_profile:
+        save_kwargs["icc_profile"] = icc_profile
+    crop.save(buffer, format="PNG", **save_kwargs)
 
     return CropResult(
         presetId=preset.id,

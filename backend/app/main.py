@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from starlette.background import BackgroundTask
 
 from .cropping import make_crop
+from .image_utils import open_image_as_srgb
 from .model_manager import ensure_model_available
 from .pose import Pose, make_pose_provider
 from .batch_store import (
@@ -367,7 +368,7 @@ async def process_upload(
 ) -> ProcessResponse:
     try:
         raw = await image.read()
-        source_image = Image.open(BytesIO(raw)).convert("RGB")
+        source_image = open_image_as_srgb(BytesIO(raw))
     except (UnidentifiedImageError, OSError) as exc:
         raise HTTPException(status_code=400, detail="Unsupported image file") from exc
 
@@ -422,7 +423,7 @@ async def process_upload_to_output_dir(
 async def analyze_upload(image: UploadFile, provider_name: str | None = None) -> PoseAnalysis:
     try:
         raw = await image.read()
-        source_image = Image.open(BytesIO(raw)).convert("RGB")
+        source_image = open_image_as_srgb(BytesIO(raw))
     except (UnidentifiedImageError, OSError) as exc:
         raise HTTPException(status_code=400, detail="Unsupported image file") from exc
 
@@ -444,7 +445,7 @@ async def create_training_sample(
 ) -> TrainingSample:
     try:
         raw = await image.read()
-        source_image = Image.open(BytesIO(raw)).convert("RGB")
+        source_image = open_image_as_srgb(BytesIO(raw))
     except (UnidentifiedImageError, OSError) as exc:
         raise HTTPException(status_code=400, detail="Unsupported image file") from exc
 
@@ -491,7 +492,7 @@ def reanalyze_training_samples(
             next_samples.append(sample)
             continue
         try:
-            source_image = Image.open(image_path).convert("RGB")
+            source_image = open_image_as_srgb(image_path)
         except (UnidentifiedImageError, OSError):
             next_samples.append(sample)
             continue

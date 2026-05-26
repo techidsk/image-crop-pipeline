@@ -1,8 +1,12 @@
+import base64
+from io import BytesIO
+
 import pytest
 from PIL import Image
 from pydantic import ValidationError
 
 from backend.app.cropping import make_crop, person_bounds
+from backend.app.image_utils import SRGB_PROFILE_BYTES, open_image_as_srgb
 from backend.app.main import detect_pose, presets_for_view
 from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
 from backend.app.schemas import CropPreset, PoseKeypoint
@@ -32,6 +36,46 @@ def test_crop_preset_rejects_invalid_tags():
             height=100,
             anchor="neck",
         )
+
+
+def test_open_image_as_srgb_attaches_color_profile():
+    source = Image.new("RGB", (20, 20), (64, 128, 192))
+    buffer = BytesIO()
+    source.save(buffer, format="PNG", icc_profile=SRGB_PROFILE_BYTES)
+
+    image = open_image_as_srgb(BytesIO(buffer.getvalue()))
+
+    assert image.mode == "RGB"
+    assert image.info.get("icc_profile") == SRGB_PROFILE_BYTES
+
+
+def test_open_image_as_srgb_preserves_alpha_channel():
+    source = Image.new("RGBA", (20, 20), (64, 128, 192, 96))
+    buffer = BytesIO()
+    source.save(buffer, format="PNG", icc_profile=SRGB_PROFILE_BYTES)
+
+    image = open_image_as_srgb(BytesIO(buffer.getvalue()))
+
+    assert image.mode == "RGBA"
+    assert image.getchannel("A").getextrema() == (96, 96)
+
+
+def test_make_crop_preserves_color_profile():
+    image = Image.new("RGB", (100, 100), (64, 128, 192))
+    image.info["icc_profile"] = SRGB_PROFILE_BYTES
+    pose = Pose(keypoints=[PoseKeypoint(name="neck", x=50, y=50, confidence=0.9)])
+    preset = CropPreset(
+        id="profiled",
+        name="Profiled",
+        width=50,
+        height=50,
+        anchor="neck",
+    )
+
+    result = make_crop(image, pose, preset)
+    output = Image.open(BytesIO(base64.b64decode(result.image)))
+
+    assert output.info.get("icc_profile") == SRGB_PROFILE_BYTES
 
 
 def test_make_crop_uses_anchor_and_target_size():
