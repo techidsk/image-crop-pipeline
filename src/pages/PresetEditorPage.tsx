@@ -15,6 +15,7 @@ import {
   Empty,
   Flex,
   Input,
+  Segmented,
   Select,
   Space,
   Table,
@@ -82,6 +83,15 @@ type PresetEditorPageProps = {
 };
 
 const viewAngles: ViewAngle[] = ["front", "side", "back"];
+const SAMPLE_FILTER_OPTIONS = [
+  { label: "全部", value: "all" },
+  { label: "待处理", value: "pending" },
+  { label: "已确认", value: "confirmed" },
+  { label: "训练", value: "train" },
+  { label: "测试", value: "test" }
+];
+
+type SampleFilter = "all" | "pending" | "confirmed" | "train" | "test";
 
 const STATUS_META: Record<PresetStatus, { label: string; color: string }> = {
   draft: { label: "草稿", color: "default" },
@@ -94,20 +104,38 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
   const { message } = App.useApp();
   const [samples, setSamples] = useState<TrainingSample[]>([]);
   const [selectedSampleId, setSelectedSampleId] = useState("");
+  const [sampleFilter, setSampleFilter] = useState<SampleFilter>("all");
+  const [nameDraft, setNameDraft] = useState(preset.name);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [diagnostics, setDiagnostics] = useState<TrainingDiagnostics | null>(null);
   const confirmedSamples = samples.filter((sample) => sample.confirmed);
   const trainSamples = confirmedSamples.filter((sample) => sample.set === "train");
   const testSamples = confirmedSamples.filter((sample) => sample.set === "test");
-  const selectedSample = samples.find((sample) => sample.id === selectedSampleId) ?? samples[0];
+  const visibleSamples = samples.filter((sample) => {
+    if (sampleFilter === "pending") return !sample.confirmed;
+    if (sampleFilter === "confirmed") return sample.confirmed;
+    if (sampleFilter === "train") return sample.confirmed && sample.set === "train";
+    if (sampleFilter === "test") return sample.confirmed && sample.set === "test";
+    return true;
+  });
+  const selectedSample = visibleSamples.find((sample) => sample.id === selectedSampleId) ?? visibleSamples[0];
   const activeViewAngles = preset.viewAngles?.length ? preset.viewAngles : viewAngles;
   const loadedRef = useRef("");
+
+  useEffect(() => {
+    setNameDraft(preset.name);
+  }, [preset.id, preset.name]);
 
   useEffect(() => {
     if (loadedRef.current === preset.id) return;
     loadedRef.current = preset.id;
     void loadSavedSamples();
   }, [preset.id]);
+
+  useEffect(() => {
+    if (selectedSampleId && visibleSamples.some((sample) => sample.id === selectedSampleId)) return;
+    setSelectedSampleId(visibleSamples[0]?.id ?? "");
+  }, [selectedSampleId, visibleSamples]);
 
   const loadSavedSamples = async () => {
     try {
@@ -352,6 +380,11 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
     });
   };
 
+  const commitName = () => {
+    if (nameDraft === preset.name) return;
+    onUpdate(preset.id, { name: nameDraft });
+  };
+
   const tagOptions = Array.from(new Set([...allTags, ...preset.tags])).map((tag) => ({
     value: tag,
     label: tag
@@ -366,7 +399,7 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={onBack}>返回</Button>
             <Flex vertical>
-              <Title level={4} style={{ margin: 0 }}>{preset.name}</Title>
+              <Title level={4} style={{ margin: 0 }}>{nameDraft}</Title>
               <Text type="secondary">编辑元数据、裁切参数和训练策略</Text>
             </Flex>
           </Space>
@@ -380,8 +413,10 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
             <Flex vertical gap={4}>
               <Text type="secondary">名称</Text>
               <Input
-                value={preset.name}
-                onChange={(event) => onUpdate(preset.id, { name: event.target.value })}
+                value={nameDraft}
+                onChange={(event) => setNameDraft(event.target.value)}
+                onBlur={commitName}
+                onPressEnter={commitName}
               />
             </Flex>
 
@@ -471,7 +506,8 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
               multiple
               accept="image/png,image/jpeg,image/webp"
               showUploadList={false}
-              beforeUpload={(_file, allFiles) => {
+              beforeUpload={(file, allFiles) => {
+                if (file.uid !== allFiles[0]?.uid) return false;
                 void loadTrainingSamples(allFiles);
                 return false;
               }}
@@ -502,6 +538,12 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                   {trainSamples.length}/5
                 </Tag>
                 <Text type="secondary">· 测试集 {testSamples.length} 组</Text>
+                <Segmented
+                  size="small"
+                  value={sampleFilter}
+                  options={SAMPLE_FILTER_OPTIONS}
+                  onChange={(value) => setSampleFilter(value as SampleFilter)}
+                />
               </Space>
               <Space wrap>
                 <Button
@@ -539,15 +581,18 @@ export function PresetEditorPage({ preset, allTags, poseProvider, onBack, onUpda
                 size="small"
                 type="inner"
                 title="样本列表"
-                extra={<Text type="secondary">{samples.length} 张</Text>}
+                extra={<Text type="secondary">{visibleSamples.length} / {samples.length} 张</Text>}
                 styles={{ body: { padding: 0, maxHeight: 520, overflow: "auto" } }}
               >
-                {samples.length === 0 ? (
+                {visibleSamples.length === 0 ? (
                   <div style={{ padding: 12 }}>
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="上传样本后从这里选择" />
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description={samples.length === 0 ? "上传样本后从这里选择" : "没有匹配的样本"}
+                    />
                   </div>
                 ) : (
-                  samples.map((sample) => {
+                  visibleSamples.map((sample) => {
                     const isActive = selectedSample?.id === sample.id;
                     return (
                       <button

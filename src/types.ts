@@ -78,6 +78,7 @@ export type TrainingSample = {
   id: string;
   filename: string;
   imageUrl: string;
+  imageHash?: string | null;
   previewUrl: string;
   source: { width: number; height: number };
   keypoints: PoseKeypoint[];

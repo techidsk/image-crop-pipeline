@@ -105,6 +105,7 @@ class TrainingSample(BaseModel):
     id: str
     filename: str
     imageUrl: str
+    imageHash: str | None = None
     source: dict[str, int]
     keypoints: list[PoseKeypoint]
     viewAngle: ViewAngle = "front"

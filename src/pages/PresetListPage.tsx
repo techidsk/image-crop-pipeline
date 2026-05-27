@@ -9,7 +9,7 @@ import {
   StopOutlined,
   UploadOutlined
 } from "@ant-design/icons";
-import { App, Button, Card, Drawer, Empty, Flex, Image, Segmented, Space, Table, Tag, Typography, Upload } from "antd";
+import { App, Button, Card, Drawer, Empty, Flex, Image, Input, Segmented, Select, Space, Table, Tag, Typography, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
 import { viewAngleLabels } from "../constants";
@@ -31,8 +31,15 @@ const STATUS_OPTIONS = [
   { label: "正式", value: "ready" },
   { label: "已停用", value: "archived" }
 ];
+const VIEW_ANGLE_OPTIONS = [
+  { label: "全部视角", value: "all" },
+  { label: viewAngleLabels.front, value: "front" },
+  { label: viewAngleLabels.side, value: "side" },
+  { label: viewAngleLabels.back, value: "back" }
+];
 
 type StatusFilter = PresetStatus | "all";
+type ViewAngleFilter = "front" | "side" | "back" | "all";
 
 type PresetListPageProps = {
   allTags: string[];
@@ -55,12 +62,31 @@ export function PresetListPage({
 }: PresetListPageProps) {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [viewAngleFilter, setViewAngleFilter] = useState<ViewAngleFilter>("all");
+  const [query, setQuery] = useState("");
   const [testingPreset, setTestingPreset] = useState<CropPreset | null>(null);
 
   const visiblePresets = presets.filter((preset) => {
     const status = preset.status ?? "draft";
+    const tags = preset.tags ?? [];
+    const normalizedQuery = query.trim().toLowerCase();
     if (statusFilter !== "all" && status !== statusFilter) return false;
-    return activeTags.every((tag) => preset.tags.includes(tag));
+    if (viewAngleFilter !== "all" && !presetViewAngles(preset).includes(viewAngleFilter)) return false;
+    if (!activeTags.every((tag) => tags.includes(tag))) return false;
+    if (!normalizedQuery) return true;
+    return [
+      preset.name,
+      preset.id,
+      preset.note,
+      preset.width,
+      preset.height,
+      STATUS_META[status].label,
+      ...tags
+    ]
+      .filter((item) => item !== undefined && item !== null)
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery);
   });
 
   const toggleTag = (tag: string) => {
@@ -203,6 +229,22 @@ export function PresetListPage({
               value={statusFilter}
               options={STATUS_OPTIONS}
               onChange={(value) => setStatusFilter(value as StatusFilter)}
+            />
+            <Text type="secondary">视角</Text>
+            <Select
+              size="small"
+              value={viewAngleFilter}
+              options={VIEW_ANGLE_OPTIONS}
+              style={{ width: 110 }}
+              onChange={(value) => setViewAngleFilter(value as ViewAngleFilter)}
+            />
+            <Input.Search
+              allowClear
+              size="small"
+              placeholder="搜索名称、ID、尺寸、标签或说明"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              style={{ width: 260 }}
             />
           </Space>
           {allTags.length > 0 && (
@@ -413,11 +455,14 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
 }
 
 function viewAngleText(preset: CropPreset) {
-  const angles = preset.viewAngles?.length ? preset.viewAngles : [preset.orientation ?? "front"];
+  const angles = presetViewAngles(preset);
   return angles.map((viewAngle) => viewAngleLabels[viewAngle]).join(" / ");
+}
+
+function presetViewAngles(preset: CropPreset) {
+  return preset.viewAngles?.length ? preset.viewAngles : [preset.orientation ?? "front"];
 }
 
 function providerLabel(provider: PoseProviderId | string) {
   return provider === "heuristic" ? "旧方案" : "RTMW-l";
 }
-

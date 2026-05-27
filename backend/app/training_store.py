@@ -57,8 +57,24 @@ def save_training_samples(preset_id: str, samples: list[TrainingSample]) -> list
 
 
 def append_training_samples(preset_id: str, samples: list[TrainingSample]) -> list[TrainingSample]:
-    next_samples = [*load_training_samples(preset_id), *samples]
+    existing_samples = load_training_samples(preset_id)
+    existing_keys = {dedupe_key(sample) for sample in existing_samples}
+    next_samples = [*existing_samples]
+    for sample in samples:
+        key = dedupe_key(sample)
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        next_samples.append(sample)
     return save_training_samples(preset_id, next_samples)
+
+
+def dedupe_key(sample: TrainingSample) -> str:
+    if sample.imageHash:
+        return f"hash:{sample.imageHash}"
+    width = sample.source.get("width", 0)
+    height = sample.source.get("height", 0)
+    return f"legacy:{sample.filename}:{width}x{height}"
 
 
 def make_sample_id() -> str:
