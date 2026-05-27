@@ -14,9 +14,10 @@ type BatchPageProps = {
   presets: CropPreset[];
   poseProvider: PoseProviderId;
   onToggleTag: (tag: string) => void;
+  onOpenPreset: (presetId: string) => void;
 };
 
-export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggleTag }: BatchPageProps) {
+export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggleTag, onOpenPreset }: BatchPageProps) {
   const { message } = App.useApp();
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -183,7 +184,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
       <Flex vertical gap={12}>
         <Card size="small" styles={{ body: { minHeight: 360 } }}>
           {active ? (
-            <ResultOverview result={active} />
+            <ResultOverview result={active} onOpenPreset={onOpenPreset} />
           ) : previewUrls[0] ? (
             <Image src={previewUrls[0]} alt="原图预览" style={{ objectFit: "contain", maxHeight: 480 }} />
           ) : (
@@ -209,6 +210,7 @@ export function BatchPage({ allTags, activeTags, presets, poseProvider, onToggle
                     key={`${result.filename}-${crop.presetId}`}
                     filename={result.filename ?? "image"}
                     crop={crop}
+                    onOpenPreset={onOpenPreset}
                   />
                 ))
               )}

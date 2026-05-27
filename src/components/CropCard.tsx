@@ -1,5 +1,5 @@
 import { DownloadOutlined } from "@ant-design/icons";
-import { Card, Flex, Image, Typography } from "antd";
+import { Button, Card, Flex, Image, Typography } from "antd";
 import type { CropResult } from "../types";
 
 const { Text } = Typography;
@@ -7,9 +7,10 @@ const { Text } = Typography;
 type CropCardProps = {
   filename: string;
   crop: CropResult;
+  onOpenPreset?: (presetId: string) => void;
 };
 
-export function CropCard({ filename, crop }: CropCardProps) {
+export function CropCard({ filename, crop, onOpenPreset }: CropCardProps) {
   const safeName = filename.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "_");
   const src = crop.imageUrl || (crop.image ? `data:image/png;base64,${crop.image}` : "");
   return (
@@ -24,7 +25,18 @@ export function CropCard({ filename, crop }: CropCardProps) {
       ]}
     >
       <Flex vertical gap={2}>
-        <Text strong>{crop.name}</Text>
+        {onOpenPreset ? (
+          <Button
+            type="link"
+            size="small"
+            style={{ alignSelf: "flex-start", height: "auto", padding: 0, fontWeight: 600 }}
+            onClick={() => onOpenPreset(crop.presetId)}
+          >
+            {crop.name}
+          </Button>
+        ) : (
+          <Text strong>{crop.name}</Text>
+        )}
         <Text type="secondary">
           {safeName} · {crop.width}x{crop.height} · L{crop.box.left} T{crop.box.top}
         </Text>

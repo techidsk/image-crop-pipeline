@@ -60,6 +60,7 @@ type BatchJobsPageProps = {
   onJobCreated: (job: BatchJob) => void;
   onJobUpdated: (job: BatchJob) => void;
   onJobsRefresh: () => Promise<void>;
+  onOpenPreset: (presetId: string) => void;
 };
 
 type StreamEvent =
@@ -110,7 +111,16 @@ const viewAngleOptions: Array<{ label: string; value: ViewAngle }> = [
   { label: viewAngleLabels.back, value: "back" }
 ];
 
-export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled, onJobCreated, onJobUpdated, onJobsRefresh }: BatchJobsPageProps) {
+export function BatchJobsPage({
+  scenes,
+  jobs,
+  poseProvider,
+  openOutputDirEnabled,
+  onJobCreated,
+  onJobUpdated,
+  onJobsRefresh,
+  onOpenPreset
+}: BatchJobsPageProps) {
   const { message } = App.useApp();
   const activeScenes = scenes.filter((scene) => scene.status !== "archived");
   const [sceneId, setSceneId] = useState(activeScenes[0]?.id ?? "");
@@ -802,11 +812,9 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                         <Text type="secondary">{active.crops.length} 张输出</Text>
                       </Space>
                       <Space>
-                        <Select
-                          size="small"
+                        <AngleCorrectionControls
                           value={activeCorrectedAngle}
-                          style={{ width: 96 }}
-                          options={viewAngleOptions}
+                          loading={isRunning}
                           onChange={(value) => {
                             if (!selectedJob || !activeFilename) return;
                             setCorrectedAngles((current) => ({
@@ -817,15 +825,8 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                               }
                             }));
                           }}
+                          onRegenerate={regenerateSelectedImageWithView}
                         />
-                        <Button
-                          size="small"
-                          icon={<ReloadOutlined />}
-                          loading={isRunning}
-                          onClick={regenerateSelectedImageWithView}
-                        >
-                          按修正朝向重生成
-                        </Button>
                       </Space>
                     </Flex>
                     <div
@@ -840,6 +841,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                           key={`${active.filename}-${crop.presetId}`}
                           filename={active.filename ?? "image"}
                           crop={crop}
+                          onOpenPreset={onOpenPreset}
                         />
                       ))}
                     </div>
@@ -850,11 +852,9 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                       <Flex align="center" justify="space-between">
                         <Text strong>{activeFilename}</Text>
                         <Space>
-                          <Select
-                            size="small"
+                          <AngleCorrectionControls
                             value={activeCorrectedAngle}
-                            style={{ width: 96 }}
-                            options={viewAngleOptions}
+                            loading={isRunning}
                             onChange={(value) => {
                               if (!selectedJob || !activeFilename) return;
                               setCorrectedAngles((current) => ({
@@ -865,15 +865,8 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                                 }
                               }));
                             }}
+                            onRegenerate={regenerateSelectedImageWithView}
                           />
-                          <Button
-                            size="small"
-                            icon={<ReloadOutlined />}
-                            loading={isRunning}
-                            onClick={regenerateSelectedImageWithView}
-                          >
-                            按修正朝向重生成
-                          </Button>
                         </Space>
                       </Flex>
                     )}
@@ -926,6 +919,39 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
         </Card>
       </Flex>
     </div>
+  );
+}
+
+function AngleCorrectionControls({
+  value,
+  loading,
+  onChange,
+  onRegenerate
+}: {
+  value: ViewAngle;
+  loading: boolean;
+  onChange: (value: ViewAngle) => void;
+  onRegenerate: () => void;
+}) {
+  return (
+    <Space.Compact>
+      <Radio.Group
+        size="small"
+        optionType="button"
+        buttonStyle="solid"
+        value={value}
+        options={viewAngleOptions}
+        onChange={(event) => onChange(event.target.value as ViewAngle)}
+      />
+      <Button
+        size="small"
+        icon={<ReloadOutlined />}
+        loading={loading}
+        onClick={onRegenerate}
+      >
+        重生成
+      </Button>
+    </Space.Compact>
   );
 }
 

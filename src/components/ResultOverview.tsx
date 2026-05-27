@@ -1,10 +1,15 @@
-import { Flex, Image, Space, Tag, Typography } from "antd";
+import { Button, Flex, Image, Space, Tag, Typography } from "antd";
 import type { ProcessResponse } from "../types";
 import { viewAngleLabels } from "../constants";
 
 const { Title } = Typography;
 
-export function ResultOverview({ result }: { result: ProcessResponse }) {
+type ResultOverviewProps = {
+  result: ProcessResponse;
+  onOpenPreset?: (presetId: string) => void;
+};
+
+export function ResultOverview({ result, onOpenPreset }: ResultOverviewProps) {
   return (
     <Flex vertical gap={12}>
       <Flex align="flex-start" justify="space-between" gap={12}>
@@ -19,13 +24,26 @@ export function ResultOverview({ result }: { result: ProcessResponse }) {
       <Image.PreviewGroup>
         <Flex wrap gap={8}>
           {result.crops.map((crop) => (
-            <Image
-              key={crop.presetId}
-              src={`data:image/png;base64,${crop.image}`}
-              alt={crop.name}
-              width={120}
-              style={{ objectFit: "cover", borderRadius: 6 }}
-            />
+            <Flex key={crop.presetId} vertical gap={4} style={{ width: 120 }}>
+              <Image
+                src={`data:image/png;base64,${crop.image}`}
+                alt={crop.name}
+                width={120}
+                style={{ objectFit: "cover", borderRadius: 6 }}
+              />
+              {onOpenPreset ? (
+                <Button
+                  type="link"
+                  size="small"
+                  style={{ height: "auto", padding: 0, justifyContent: "flex-start" }}
+                  onClick={() => onOpenPreset(crop.presetId)}
+                >
+                  {crop.name}
+                </Button>
+              ) : (
+                <Typography.Text ellipsis style={{ fontSize: 12 }}>{crop.name}</Typography.Text>
+              )}
+            </Flex>
           ))}
         </Flex>
       </Image.PreviewGroup>

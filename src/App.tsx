@@ -246,6 +246,7 @@ export function App() {
                       current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]
                     )
                   }
+                  onOpenPreset={openEditor}
                 />
               }
             />
@@ -260,6 +261,7 @@ export function App() {
                   onJobCreated={(job) => setJobs((current) => [job, ...current])}
                   onJobUpdated={updateJob}
                   onJobsRefresh={loadJobs}
+                  onOpenPreset={openEditor}
                 />
               }
             />
