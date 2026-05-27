@@ -152,13 +152,20 @@ def test_download_batch_job_output_rejects_missing_output_dir(isolated_batch_sto
 
 def test_get_batch_job_detail_reconstructs_output_previews(isolated_batch_store, tmp_path, monkeypatch):
     output_dir = tmp_path / "outputs" / "job-1"
-    crop_dir = output_dir / "front-only"
+    crop_dir = output_dir / "服装A" / "正面"
     originals_dir = output_dir / "_originals"
     crop_dir.mkdir(parents=True)
-    originals_dir.mkdir(parents=True)
-    Image.new("RGB", (80, 90), "white").save(crop_dir / "a_front-only.png")
-    Image.new("RGB", (1000, 1200), "white").save(originals_dir / "a.jpg")
-    batch_store.append_batch_job(make_job().model_copy(update={"outputDir": str(output_dir)}))
+    (originals_dir / "服装A" / "正面").mkdir(parents=True)
+    Image.new("RGB", (80, 90), "white").save(crop_dir / "001_front-only.png")
+    Image.new("RGB", (1000, 1200), "white").save(originals_dir / "服装A" / "正面" / "001.jpg")
+    batch_store.append_batch_job(
+        make_job().model_copy(
+            update={
+                "outputDir": str(output_dir),
+                "images": [BatchJobImage(filename="服装A/正面/001.jpg", outputs=1)],
+            }
+        )
+    )
     monkeypatch.setattr(
         main,
         "load_presets",
@@ -170,27 +177,34 @@ def test_get_batch_job_detail_reconstructs_output_previews(isolated_batch_store,
     assert response.status_code == 200
     body = response.json()
     assert body["job"]["id"] == "job-1"
-    assert body["images"][0]["filename"] == "a.jpg"
+    assert body["images"][0]["filename"] == "服装A/正面/001.jpg"
     assert body["images"][0]["source"] == {"width": 1000, "height": 1200}
     assert body["images"][0]["crops"][0]["presetId"] == "front-only"
     assert body["images"][0]["crops"][0]["name"] == "Front"
-    assert body["images"][0]["crops"][0]["imageUrl"] == "/api/batch-jobs/job-1/files/front-only/a_front-only.png"
+    assert body["images"][0]["crops"][0]["imageUrl"] == "/api/batch-jobs/job-1/files/服装A/正面/001_front-only.png"
 
 
 def test_regenerate_batch_job_image_with_manual_view_uses_archived_original(isolated_batch_store, tmp_path, monkeypatch):
     output_dir = tmp_path / "outputs" / "job-1"
-    originals_dir = output_dir / "_originals"
-    old_output_dir = output_dir / "front-only"
+    originals_dir = output_dir / "_originals" / "服装A" / "正面"
+    old_output_dir = output_dir / "服装A" / "正面"
     originals_dir.mkdir(parents=True)
     old_output_dir.mkdir(parents=True)
     image = Image.new("RGB", (1000, 1000), "white")
     buffer = BytesIO()
     image.save(buffer, format="JPEG")
-    (originals_dir / "a.jpg").write_bytes(buffer.getvalue())
-    old_output = old_output_dir / "a_front-only.png"
+    (originals_dir / "001.jpg").write_bytes(buffer.getvalue())
+    old_output = old_output_dir / "001_front-only.png"
     old_output.write_bytes(b"old")
 
-    batch_store.append_batch_job(make_job().model_copy(update={"outputDir": str(output_dir)}))
+    batch_store.append_batch_job(
+        make_job().model_copy(
+            update={
+                "outputDir": str(output_dir),
+                "images": [BatchJobImage(filename="服装A/正面/001.jpg", outputs=1)],
+            }
+        )
+    )
     monkeypatch.setattr(
         main,
         "load_scenes",
@@ -206,7 +220,7 @@ def test_regenerate_batch_job_image_with_manual_view_uses_archived_original(isol
     )
 
     response = TestClient(app).post(
-        "/api/batch-jobs/job-1/images/a.jpg/regenerate-view",
+        "/api/batch-jobs/job-1/images/服装A/正面/001.jpg/regenerate-view",
         json={"viewAngle": "back"},
     )
 
@@ -218,4 +232,4 @@ def test_regenerate_batch_job_image_with_manual_view_uses_archived_original(isol
     assert body["images"][0]["viewAngle"] == "back"
     assert [crop["presetId"] for crop in body["images"][0]["crops"]] == ["back-only"]
     assert not old_output.exists()
-    assert (output_dir / "back-only" / "a_back-only.png").exists()
+    assert (output_dir / "服装A" / "正面" / "001_back-only.png").exists()

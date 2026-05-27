@@ -26,6 +26,7 @@ import {
   Statistic,
   Table,
   Tag,
+  Tooltip,
   Typography,
   Upload
 } from "antd";
@@ -47,6 +48,7 @@ import type {
 const { Title, Text } = Typography;
 const JOB_ID_PLACEHOLDER = "<任务ID>";
 const LOOSE_IMAGE_FOLDER = "散图";
+const VISIBLE_INPUT_FOLDER_COUNT = 4;
 
 type UploadFileWithPath = File & { webkitRelativePath?: string };
 type OutputLayout = "by_preset" | "single_folder";
@@ -125,7 +127,7 @@ export function BatchJobsPage({
   const activeScenes = scenes.filter((scene) => scene.status !== "archived");
   const [sceneId, setSceneId] = useState(activeScenes[0]?.id ?? "");
   const [outputDir, setOutputDir] = useState("outputs");
-  const [outputLayout, setOutputLayout] = useState<OutputLayout>("by_preset");
+  const outputLayout: OutputLayout = "single_folder";
   const [files, setFiles] = useState<File[]>([]);
   const [resultsByJob, setResultsByJob] = useState<Record<string, ProcessResponse[]>>({});
   const [selectedJobId, setSelectedJobId] = useState("");
@@ -151,8 +153,8 @@ export function BatchJobsPage({
   const rerunnableFiles = useMemo(() => filesForRerun(files, selectedJob), [files, selectedJob]);
   const inputFolders = useMemo(() => getInputFolders(files), [files]);
   const outputPreviewRows = useMemo(
-    () => buildOutputPreviewRows(files, outputDir, outputLayout, selectedScene?.presetIds.length ?? 0),
-    [files, outputDir, outputLayout, selectedScene?.presetIds.length]
+    () => buildOutputPreviewRows(files, outputDir, selectedScene?.presetIds.length ?? 0),
+    [files, outputDir, selectedScene?.presetIds.length]
   );
 
   useEffect(() => {
@@ -630,43 +632,32 @@ export function BatchJobsPage({
               placeholder="默认 outputs；服务端部署时建议保持相对路径"
             />
           </Flex>
-          <Flex vertical gap={4}>
+          {inputFolders.length > 0 && (
             <Flex align="center" justify="space-between">
-              <Text type="secondary">输出形式</Text>
-              {inputFolders.length > 1 && (
-                <Button
-                  size="small"
-                  type="link"
-                  icon={<EyeOutlined />}
-                  onClick={() => setPreviewOpen(true)}
-                >
-                  预览输出文件夹
-                </Button>
-              )}
+              <Text type="secondary">输出结构跟随上传文件夹</Text>
+              <Button
+                size="small"
+                type="link"
+                icon={<EyeOutlined />}
+                onClick={() => setPreviewOpen(true)}
+              >
+                预览输出文件夹
+              </Button>
             </Flex>
-            <Radio.Group
-              block
-              optionType="button"
-              buttonStyle="solid"
-              value={outputLayout}
-              onChange={(event) => setOutputLayout(event.target.value)}
-              options={[
-                { label: "按预设分组", value: "by_preset" },
-                { label: "统一汇总", value: "single_folder" }
-              ]}
-            />
-          </Flex>
+          )}
 
           <Upload.Dragger {...uploadProps}>
             <p className="ant-upload-drag-icon"><InboxOutlined /></p>
             <p className="ant-upload-text">
               {files.length === 0 ? "上传多张原图" : `${files.length} 张原图待处理`}
             </p>
-            <p className="ant-upload-hint">可拖拽图片或文件夹；多文件夹会保留最外层文件夹名</p>
+            <p className="ant-upload-hint">可拖拽图片或文件夹；输出会保留上传文件夹结构</p>
           </Upload.Dragger>
           <Upload {...folderUploadProps}>
             <Button icon={<FolderOpenOutlined />}>选择文件夹</Button>
           </Upload>
+
+          <InputFolderSummary folders={inputFolders} fileCount={files.length} />
 
           <Space>
             <Button
@@ -919,6 +910,43 @@ export function BatchJobsPage({
         </Card>
       </Flex>
     </div>
+  );
+}
+
+function InputFolderSummary({ folders, fileCount }: { folders: string[]; fileCount: number }) {
+  if (fileCount === 0) return null;
+
+  const visibleFolders = folders.slice(0, VISIBLE_INPUT_FOLDER_COUNT);
+  const hiddenFolders = folders.slice(VISIBLE_INPUT_FOLDER_COUNT);
+
+  return (
+    <Flex vertical gap={4}>
+      <Flex align="center" justify="space-between">
+        <Text type="secondary">上传来源</Text>
+        <Text type="secondary">{folders.length} 个来源 · {fileCount} 张图</Text>
+      </Flex>
+      <Space size={4} wrap>
+        {visibleFolders.map((folder) => (
+          <Tag
+            key={folder}
+            color={folder === LOOSE_IMAGE_FOLDER ? "default" : "blue"}
+            style={{
+              maxWidth: 150,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {folder}
+          </Tag>
+        ))}
+        {hiddenFolders.length > 0 && (
+          <Tooltip title={hiddenFolders.join(" / ")}>
+            <Tag color="default">+{hiddenFolders.length}</Tag>
+          </Tooltip>
+        )}
+      </Space>
+    </Flex>
   );
 }
 
@@ -1200,14 +1228,14 @@ function normalizeUploadPath(value: string): string {
 
 function getFolderFromPath(value: string): string {
   const parts = normalizeUploadPath(value).split("/");
-  return parts.length > 1 ? parts[0] : LOOSE_IMAGE_FOLDER;
+  return parts.length > 1 ? parts.slice(0, -1).join("/") : LOOSE_IMAGE_FOLDER;
 }
 
 function getInputFolders(files: File[]): string[] {
   const folders = new Set<string>();
   files.forEach((file) => {
     const folder = getFolderFromPath(getFileRelativePath(file));
-    if (folder !== LOOSE_IMAGE_FOLDER) folders.add(folder);
+    folders.add(folder);
   });
   return [...folders].sort((left, right) => left.localeCompare(right));
 }
@@ -1215,13 +1243,12 @@ function getInputFolders(files: File[]): string[] {
 function buildOutputPreviewRows(
   files: File[],
   outputDir: string,
-  outputLayout: OutputLayout,
   presetCount: number
 ): Array<{ folder: string; path: string; count: number }> {
   const counts = new Map<string, number>();
   files.forEach((file) => {
     const parts = getFileRelativePath(file).split("/");
-    const folder = parts.length > 1 ? parts[0] : "散图";
+    const folder = parts.length > 1 ? parts.slice(0, -1).join("/") : "散图";
     counts.set(folder, (counts.get(folder) ?? 0) + 1);
   });
   return [...counts.entries()]
@@ -1231,7 +1258,7 @@ function buildOutputPreviewRows(
       const groupPath = folder === "散图" ? base : joinDisplayPath(base, folder);
       return {
         folder,
-        path: outputLayout === "single_folder" ? groupPath : joinDisplayPath(groupPath, "<预设ID>"),
+        path: groupPath,
         count: fileCount * presetCount
       };
     });

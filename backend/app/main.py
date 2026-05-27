@@ -174,32 +174,32 @@ def normalize_relative_path(value: str | None, fallback: str = "image") -> str:
     return "/".join(parts)
 
 
-def safe_dirname(value: str) -> str:
-    safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value)
-    return safe or "folder"
-
-
-def source_folder_name(relative_path: str) -> str | None:
-    parts = PurePosixPath(normalize_relative_path(relative_path)).parts
-    if len(parts) < 2:
-        return None
-    return safe_dirname(parts[0])
+def safe_path_part(value: str, fallback: str = "part") -> str:
+    invalid = set('<>:"/\\|?*')
+    safe = "".join("_" if char in invalid or ord(char) < 32 else char for char in value)
+    safe = safe.rstrip(" .")
+    return safe or fallback
 
 
 def source_folder_label(relative_path: str) -> str:
     parts = PurePosixPath(normalize_relative_path(relative_path)).parts
     if len(parts) < 2:
         return "散图"
-    return parts[0]
+    return "/".join(parts[:-1])
 
 
-def output_source_name(relative_path: str) -> str:
-    parts = list(PurePosixPath(normalize_relative_path(relative_path)).parts)
-    if len(parts) > 1:
-        parts = parts[1:]
-    stem_parts = [safe_dirname(part) for part in parts[:-1]]
-    stem_parts.append(safe_filename(parts[-1] if parts else "image"))
-    return "_".join(part for part in stem_parts if part) or "image"
+def output_source_dir_parts(relative_path: str) -> list[str]:
+    parts = PurePosixPath(normalize_relative_path(relative_path)).parts
+    return [safe_path_part(part, "folder") for part in parts[:-1]]
+
+
+def output_source_stem(relative_path: str) -> str:
+    name = PurePosixPath(normalize_relative_path(relative_path)).name or "image"
+    return safe_path_part(PurePosixPath(name).stem or "image", "image")
+
+
+def output_crop_filename(relative_path: str, preset_id: str) -> str:
+    return f"{output_source_stem(relative_path)}_{safe_filename(preset_id)}.png"
 
 
 def resolve_output_layout(value: str | None) -> str:
@@ -221,8 +221,8 @@ def archive_originals(job_dir: Path, uploaded: list[tuple[str, bytes]]) -> None:
         return
     for filename, data in uploaded:
         relative = normalize_relative_path(filename)
-        safe_parts = [safe_dirname(part) for part in PurePosixPath(relative).parts[:-1]]
-        safe_name = Path(PurePosixPath(relative).name or "image").name or "image"
+        safe_parts = [safe_path_part(part, "folder") for part in PurePosixPath(relative).parts[:-1]]
+        safe_name = safe_path_part(PurePosixPath(relative).name or "image", "image")
         try:
             output_path = target.joinpath(*safe_parts, safe_name)
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -238,8 +238,8 @@ def load_archived_originals(job: BatchJob) -> list[tuple[str, bytes]]:
     items: list[tuple[str, bytes]] = []
     for image in job.images:
         relative = normalize_relative_path(image.filename)
-        safe_parts = [safe_dirname(part) for part in PurePosixPath(relative).parts[:-1]]
-        safe_name = Path(PurePosixPath(relative).name or "image").name or "image"
+        safe_parts = [safe_path_part(part, "folder") for part in PurePosixPath(relative).parts[:-1]]
+        safe_name = safe_path_part(PurePosixPath(relative).name or "image", "image")
         candidate = originals_dir.joinpath(*safe_parts, safe_name)
         if not candidate.exists() or not candidate.is_file():
             continue
@@ -497,18 +497,12 @@ async def process_upload_to_output_dir(
 ) -> ProcessResponse:
     response = await process_upload(image, crop_presets, provider_name, view_angle_override)
     relative_source_path = source_path or response.filename or image.filename or "image"
-    source_name = output_source_name(relative_source_path)
-    group_name = source_folder_name(relative_source_path)
+    source_dirs = output_source_dir_parts(relative_source_path)
     next_crops: list[CropResult] = []
     for crop in response.crops:
-        preset_subdir = safe_filename(crop.presetId)
-        crop_dir = output_dir
-        if group_name:
-            crop_dir = crop_dir / group_name
-        if output_layout == OUTPUT_LAYOUT_BY_PRESET:
-            crop_dir = crop_dir / preset_subdir
+        crop_dir = output_dir.joinpath(*source_dirs)
         crop_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{source_name}_{safe_filename(crop.presetId)}.png"
+        filename = output_crop_filename(relative_source_path, crop.presetId)
         output_path = crop_dir / filename
         output_path.write_bytes(base64.b64decode(crop.image))
         relative_output_path = output_path.relative_to(output_dir).as_posix()
@@ -530,8 +524,8 @@ def find_archived_original(job: BatchJob, filename: str) -> tuple[str, bytes] | 
     if not originals_dir.exists() or not originals_dir.is_dir():
         return None
     relative = normalize_relative_path(filename)
-    safe_parts = [safe_dirname(part) for part in PurePosixPath(relative).parts[:-1]]
-    safe_name = Path(PurePosixPath(relative).name or "image").name or "image"
+    safe_parts = [safe_path_part(part, "folder") for part in PurePosixPath(relative).parts[:-1]]
+    safe_name = safe_path_part(PurePosixPath(relative).name or "image", "image")
     candidate = originals_dir.joinpath(*safe_parts, safe_name)
     if not candidate.exists() or not candidate.is_file():
         return None
@@ -542,8 +536,11 @@ def find_archived_original(job: BatchJob, filename: str) -> tuple[str, bytes] | 
 
 
 def remove_existing_outputs_for_source(job_dir: Path, source_path: str) -> None:
-    source_name = output_source_name(source_path)
-    for path in job_dir.rglob(f"{source_name}_*.png"):
+    search_root = job_dir.joinpath(*output_source_dir_parts(source_path))
+    source_stem = output_source_stem(source_path)
+    if not search_root.exists() or not search_root.is_dir():
+        return
+    for path in search_root.glob(f"{source_stem}_*.png"):
         try:
             if ORIGINALS_DIRNAME in path.relative_to(job_dir).parts:
                 continue
@@ -616,21 +613,20 @@ def load_batch_job_image_crops(
     source_path: str,
     presets_by_safe_id: dict[str, CropPreset],
 ) -> list[CropResult]:
-    source_name = output_source_name(source_path)
-    group_name = source_folder_name(source_path)
-    search_root = job_dir / group_name if group_name else job_dir
+    source_stem = output_source_stem(source_path)
+    search_root = job_dir.joinpath(*output_source_dir_parts(source_path))
     if not search_root.exists() or not search_root.is_dir():
         return []
 
     crops: list[CropResult] = []
-    for path in sorted(search_root.rglob(f"{source_name}_*.png")):
+    for path in sorted(search_root.glob(f"{source_stem}_*.png")):
         try:
             relative = path.relative_to(job_dir)
         except ValueError:
             continue
         if ORIGINALS_DIRNAME in relative.parts or not path.is_file():
             continue
-        safe_preset_id = infer_safe_preset_id(path, source_name, job_dir)
+        safe_preset_id = infer_safe_preset_id(path, source_stem)
         preset = presets_by_safe_id.get(safe_preset_id)
         try:
             with Image.open(path) as crop_image:
@@ -652,15 +648,7 @@ def load_batch_job_image_crops(
     return crops
 
 
-def infer_safe_preset_id(path: Path, source_name: str, job_dir: Path) -> str:
-    try:
-        relative = path.relative_to(job_dir)
-    except ValueError:
-        relative = path
-    if len(relative.parts) >= 2 and relative.parent.name:
-        parent = relative.parent.name
-        if parent != source_folder_name(str(relative)):
-            return parent
+def infer_safe_preset_id(path: Path, source_name: str) -> str:
     stem = path.stem
     prefix = f"{source_name}_"
     return stem[len(prefix):] if stem.startswith(prefix) else stem
