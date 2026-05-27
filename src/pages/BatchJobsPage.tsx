@@ -46,9 +46,11 @@ import type {
 
 const { Title, Text } = Typography;
 const JOB_ID_PLACEHOLDER = "<任务ID>";
+const LOOSE_IMAGE_FOLDER = "散图";
 
 type UploadFileWithPath = File & { webkitRelativePath?: string };
 type OutputLayout = "by_preset" | "single_folder";
+type BatchQueueItem = { filename: string; folder: string };
 
 type BatchJobsPageProps = {
   scenes: CropScene[];
@@ -61,14 +63,22 @@ type BatchJobsPageProps = {
 };
 
 type StreamEvent =
-  | { type: "start"; jobId: string; total: number; presetCount: number; outputDir: string }
-  | { type: "active"; jobId: string; completed: number; total: number; filename: string }
+  | {
+      type: "start";
+      jobId: string;
+      total: number;
+      presetCount: number;
+      outputDir: string;
+      files?: BatchQueueItem[];
+    }
+  | { type: "active"; jobId: string; completed: number; total: number; filename: string; folder?: string }
   | {
       type: "progress";
       jobId: string;
       completed: number;
       total: number;
       filename: string;
+      folder?: string;
       outputs: number;
       error?: string;
       result?: ProcessResponse;
@@ -83,7 +93,9 @@ type RunProgress = {
   presetCount: number;
   outputDir: string;
   activeFilename: string;
-  events: Array<{ filename: string; outputs: number; error?: string }>;
+  activeFolder: string;
+  queue: BatchQueueItem[];
+  events: Array<{ filename: string; folder: string; outputs: number; error?: string }>;
 };
 
 const REVIEW_META: Record<ReviewStatus, { label: string; color: string }> = {
@@ -343,13 +355,22 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
         presetCount: event.presetCount,
         outputDir: event.outputDir,
         activeFilename: "",
+        activeFolder: "",
+        queue: event.files ?? [],
         events: []
       });
       return;
     }
     if (event.type === "active") {
       setProgress((current) =>
-        current ? { ...current, completed: event.completed, activeFilename: event.filename } : current
+        current
+          ? {
+              ...current,
+              completed: event.completed,
+              activeFilename: event.filename,
+              activeFolder: event.folder ?? getFolderFromPath(event.filename)
+            }
+          : current
       );
       return;
     }
@@ -360,9 +381,15 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
               ...current,
               completed: event.completed,
               activeFilename: event.filename,
+              activeFolder: event.folder ?? getFolderFromPath(event.filename),
               events: [
                 ...current.events,
-                { filename: event.filename, outputs: event.outputs, error: event.error }
+                {
+                  filename: event.filename,
+                  folder: event.folder ?? getFolderFromPath(event.filename),
+                  outputs: event.outputs,
+                  error: event.error
+                }
               ]
             }
           : current
@@ -904,14 +931,53 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
 
 function ProgressPanel({ progress }: { progress: RunProgress }) {
   const percent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+  const folderRows = buildFolderProgressRows(progress);
   return (
-        <Card size="small" type="inner" title={progress.jobId || "任务准备中"} extra={<Text type="secondary">{progress.completed}/{progress.total}</Text>}>
+    <Card
+      size="small"
+      type="inner"
+      title={progress.jobId || "任务准备中"}
+      extra={<Text type="secondary">{progress.completed}/{progress.total}</Text>}
+    >
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
         <Progress percent={percent} size="small" status={percent === 100 ? "success" : "active"} />
         <Flex align="center" justify="space-between">
-          <Text type="secondary">{progress.activeFilename || "等待开始"}</Text>
+          <Space size={6}>
+            <Tag color={progress.activeFolder ? "blue" : "default"} style={{ marginInlineEnd: 0 }}>
+              {progress.activeFolder || "等待开始"}
+            </Tag>
+            <Text type="secondary" ellipsis>
+              {progress.activeFilename || "等待开始"}
+            </Text>
+          </Space>
           <Tag color="cyan">{progress.presetCount} 个预设</Tag>
         </Flex>
+        {folderRows.length > 0 && (
+          <Flex vertical gap={6} style={{ maxHeight: 160, overflowY: "auto" }}>
+            {folderRows.map((row) => (
+              <Flex
+                key={row.folder}
+                align="center"
+                justify="space-between"
+                gap={8}
+                style={{ padding: "4px 0", borderBottom: "1px solid #f0f0f0" }}
+              >
+                <Space size={6} style={{ minWidth: 0 }}>
+                  <FolderStatusIcon status={row.status} />
+                  <Text ellipsis>{row.folder}</Text>
+                </Space>
+                <Space size={6}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {row.completed}/{row.total}
+                  </Text>
+                  <Tag color={FOLDER_STATUS_META[row.status].color} style={{ marginInlineEnd: 0 }}>
+                    {FOLDER_STATUS_META[row.status].label}
+                  </Tag>
+                </Space>
+              </Flex>
+            ))}
+          </Flex>
+        )}
         <Flex vertical gap={4}>
           {progress.events.slice(-5).map((event, index) => (
             <Flex
@@ -922,7 +988,7 @@ function ProgressPanel({ progress }: { progress: RunProgress }) {
             >
               {event.error ? <WarningOutlined /> : <CheckCircleOutlined />}
               <Text ellipsis>
-                {event.filename} · {event.error || `${event.outputs} 张输出`}
+                {event.folder} / {event.filename} · {event.error || `${event.outputs} 张输出`}
               </Text>
             </Flex>
           ))}
@@ -930,6 +996,69 @@ function ProgressPanel({ progress }: { progress: RunProgress }) {
       </Space>
     </Card>
   );
+}
+
+type FolderProgressStatus = "queued" | "running" | "completed" | "failed";
+
+const FOLDER_STATUS_META: Record<FolderProgressStatus, { label: string; color: string }> = {
+  queued: { label: "排队中", color: "default" },
+  running: { label: "执行中", color: "processing" },
+  completed: { label: "已完成", color: "green" },
+  failed: { label: "有失败", color: "red" }
+};
+
+type FolderProgressRow = {
+  folder: string;
+  total: number;
+  completed: number;
+  failed: number;
+  status: FolderProgressStatus;
+};
+
+function FolderStatusIcon({ status }: { status: FolderProgressStatus }) {
+  if (status === "completed") return <CheckCircleOutlined style={{ color: "#389e0d" }} />;
+  if (status === "failed") return <WarningOutlined style={{ color: "#cf1322" }} />;
+  if (status === "running") return <PlayCircleOutlined style={{ color: "#1677ff" }} />;
+  return <InboxOutlined style={{ color: "#8c8c8c" }} />;
+}
+
+function buildFolderProgressRows(progress: RunProgress): FolderProgressRow[] {
+  const rows = new Map<string, FolderProgressRow>();
+
+  const ensureRow = (folder: string): FolderProgressRow => {
+    const key = folder || LOOSE_IMAGE_FOLDER;
+    const existing = rows.get(key);
+    if (existing) return existing;
+    const row: FolderProgressRow = {
+      folder: key,
+      total: 0,
+      completed: 0,
+      failed: 0,
+      status: "queued"
+    };
+    rows.set(key, row);
+    return row;
+  };
+
+  progress.queue.forEach((item) => {
+    ensureRow(item.folder).total += 1;
+  });
+  progress.events.forEach((event) => {
+    const row = ensureRow(event.folder);
+    if (row.total === 0) row.total = progress.queue.length > 0 ? row.total : 1;
+    row.completed += 1;
+    if (event.error) row.failed += 1;
+  });
+  if (progress.activeFolder) ensureRow(progress.activeFolder);
+
+  return [...rows.values()].map((row) => {
+    const isRunning = progress.activeFolder === row.folder && progress.completed < progress.total;
+    const isComplete = row.total > 0 && row.completed >= row.total;
+    return {
+      ...row,
+      status: isRunning ? "running" : isComplete ? (row.failed > 0 ? "failed" : "completed") : "queued"
+    };
+  });
 }
 
 function JobImageList({
@@ -1043,11 +1172,16 @@ function normalizeUploadPath(value: string): string {
     .join("/") || "image";
 }
 
+function getFolderFromPath(value: string): string {
+  const parts = normalizeUploadPath(value).split("/");
+  return parts.length > 1 ? parts[0] : LOOSE_IMAGE_FOLDER;
+}
+
 function getInputFolders(files: File[]): string[] {
   const folders = new Set<string>();
   files.forEach((file) => {
-    const parts = getFileRelativePath(file).split("/");
-    if (parts.length > 1) folders.add(parts[0]);
+    const folder = getFolderFromPath(getFileRelativePath(file));
+    if (folder !== LOOSE_IMAGE_FOLDER) folders.add(folder);
   });
   return [...folders].sort((left, right) => left.localeCompare(right));
 }

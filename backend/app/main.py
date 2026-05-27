@@ -158,6 +158,13 @@ def source_folder_name(relative_path: str) -> str | None:
     return safe_dirname(parts[0])
 
 
+def source_folder_label(relative_path: str) -> str:
+    parts = PurePosixPath(normalize_relative_path(relative_path)).parts
+    if len(parts) < 2:
+        return "散图"
+    return parts[0]
+
+
 def output_source_name(relative_path: str) -> str:
     parts = list(PurePosixPath(normalize_relative_path(relative_path)).parts)
     if len(parts) > 1:
@@ -1091,6 +1098,10 @@ async def _batch_job_events(
                 "total": total,
                 "presetCount": len(crop_presets),
                 "outputDir": str(job_dir),
+                "files": [
+                    {"filename": filename, "folder": source_folder_label(filename)}
+                    for filename, _ in uploaded
+                ],
             }
         )
 
@@ -1104,6 +1115,7 @@ async def _batch_job_events(
                     "completed": index - 1,
                     "total": total,
                     "filename": filename,
+                    "folder": source_folder_label(filename),
                 }
             )
             try:
@@ -1127,6 +1139,7 @@ async def _batch_job_events(
                         "completed": index,
                         "total": total,
                         "filename": filename,
+                        "folder": source_folder_label(filename),
                         "outputs": len(result.crops),
                         "result": result.model_dump(mode="json"),
                     }
@@ -1141,6 +1154,7 @@ async def _batch_job_events(
                         "completed": index,
                         "total": total,
                         "filename": filename,
+                        "folder": source_folder_label(filename),
                         "outputs": 0,
                         "error": str(exc.detail),
                     }
