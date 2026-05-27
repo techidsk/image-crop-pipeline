@@ -41,6 +41,7 @@ from .schemas import (
     PoseAnalysis,
     PoseAnalysisBatchResponse,
     ProcessResponse,
+    RegenerateViewUpdate,
     ReviewStatusUpdate,
     TrainingSample,
     TrainingSampleBatchResponse,
@@ -292,6 +293,14 @@ def get_batch_jobs() -> list[BatchJob]:
     return load_batch_jobs()
 
 
+@app.get("/api/batch-jobs/{job_id}", response_model=BatchJobResponse)
+def get_batch_job_detail(job_id: str) -> BatchJobResponse:
+    job = get_batch_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+    return BatchJobResponse(job=job, images=load_batch_job_results(job))
+
+
 @app.post("/api/batch-jobs/{job_id}/open-output")
 def open_batch_job_output(job_id: str) -> dict[str, str]:
     if not OPEN_OUTPUT_DIR_ENABLED:
@@ -411,6 +420,7 @@ async def process_upload(
     image: UploadFile,
     crop_presets: list[CropPreset],
     provider_name: str | None = None,
+    view_angle_override: str | None = None,
 ) -> ProcessResponse:
     try:
         raw = await image.read()
@@ -420,7 +430,7 @@ async def process_upload(
 
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_angle = classify_view(source_image, pose).angle
+    view_angle = view_angle_override or classify_view(source_image, pose).angle
     matched_presets = presets_for_view(crop_presets, view_angle)
     try:
         crops = [make_crop(source_image, pose, preset) for preset in matched_presets]
@@ -444,8 +454,9 @@ async def process_upload_to_output_dir(
     provider_name: str | None = None,
     source_path: str | None = None,
     output_layout: str = OUTPUT_LAYOUT_BY_PRESET,
+    view_angle_override: str | None = None,
 ) -> ProcessResponse:
-    response = await process_upload(image, crop_presets, provider_name)
+    response = await process_upload(image, crop_presets, provider_name, view_angle_override)
     relative_source_path = source_path or response.filename or image.filename or "image"
     source_name = output_source_name(relative_source_path)
     group_name = source_folder_name(relative_source_path)
@@ -473,6 +484,155 @@ async def process_upload_to_output_dir(
             )
         )
     return response.model_copy(update={"crops": next_crops})
+
+
+def find_archived_original(job: BatchJob, filename: str) -> tuple[str, bytes] | None:
+    originals_dir = archive_originals_dir(Path(job.outputDir).expanduser())
+    if not originals_dir.exists() or not originals_dir.is_dir():
+        return None
+    relative = normalize_relative_path(filename)
+    safe_parts = [safe_dirname(part) for part in PurePosixPath(relative).parts[:-1]]
+    safe_name = Path(PurePosixPath(relative).name or "image").name or "image"
+    candidate = originals_dir.joinpath(*safe_parts, safe_name)
+    if not candidate.exists() or not candidate.is_file():
+        return None
+    try:
+        return relative, candidate.read_bytes()
+    except OSError:
+        return None
+
+
+def remove_existing_outputs_for_source(job_dir: Path, source_path: str) -> None:
+    source_name = output_source_name(source_path)
+    for path in job_dir.rglob(f"{source_name}_*.png"):
+        try:
+            if ORIGINALS_DIRNAME in path.relative_to(job_dir).parts:
+                continue
+            if path.is_file():
+                path.unlink()
+        except (OSError, ValueError):
+            continue
+
+
+def replace_batch_job_image_result(job: BatchJob, result: ProcessResponse, error: str = "") -> BatchJob:
+    images: list[BatchJobImage] = []
+    matched = False
+    for image in job.images:
+        if image.filename == result.filename:
+            matched = True
+            images.append(
+                image.model_copy(
+                    update={
+                        "outputs": len(result.crops),
+                        "error": error,
+                        "reviewStatus": "pending_review",
+                    }
+                )
+            )
+        else:
+            images.append(image)
+    if not matched and result.filename:
+        images.append(BatchJobImage(filename=result.filename, outputs=len(result.crops), error=error))
+    output_count = sum(image.outputs for image in images)
+    return job.model_copy(
+        update={
+            "images": images,
+            "outputCount": output_count,
+            "status": "completed" if output_count > 0 else "failed",
+            "reviewStatus": "pending_review",
+        }
+    )
+
+
+def load_batch_job_results(job: BatchJob) -> list[ProcessResponse]:
+    job_dir = Path(job.outputDir).expanduser()
+    if not job_dir.exists() or not job_dir.is_dir():
+        return []
+
+    presets_by_safe_id = {safe_filename(preset.id): preset for preset in load_presets()}
+    results: list[ProcessResponse] = []
+    for image_report in job.images:
+        crops = load_batch_job_image_crops(job, job_dir, image_report.filename, presets_by_safe_id)
+        if not crops:
+            continue
+        source = archived_source_size(job, image_report.filename)
+        results.append(
+            ProcessResponse(
+                filename=image_report.filename,
+                source=source,
+                viewAngle="front",
+                keypoints=[],
+                crops=crops,
+            )
+        )
+    return results
+
+
+def load_batch_job_image_crops(
+    job: BatchJob,
+    job_dir: Path,
+    source_path: str,
+    presets_by_safe_id: dict[str, CropPreset],
+) -> list[CropResult]:
+    source_name = output_source_name(source_path)
+    group_name = source_folder_name(source_path)
+    search_root = job_dir / group_name if group_name else job_dir
+    if not search_root.exists() or not search_root.is_dir():
+        return []
+
+    crops: list[CropResult] = []
+    for path in sorted(search_root.rglob(f"{source_name}_*.png")):
+        try:
+            relative = path.relative_to(job_dir)
+        except ValueError:
+            continue
+        if ORIGINALS_DIRNAME in relative.parts or not path.is_file():
+            continue
+        safe_preset_id = infer_safe_preset_id(path, source_name, job_dir)
+        preset = presets_by_safe_id.get(safe_preset_id)
+        try:
+            with Image.open(path) as crop_image:
+                width, height = crop_image.size
+        except OSError:
+            continue
+        crops.append(
+            CropResult(
+                presetId=preset.id if preset else safe_preset_id,
+                name=preset.name if preset else safe_preset_id,
+                width=width,
+                height=height,
+                box={"left": 0, "top": 0, "right": width, "bottom": height},
+                image="",
+                outputPath=str(path),
+                imageUrl=f"/api/batch-jobs/{job.id}/files/{relative.as_posix()}",
+            )
+        )
+    return crops
+
+
+def infer_safe_preset_id(path: Path, source_name: str, job_dir: Path) -> str:
+    try:
+        relative = path.relative_to(job_dir)
+    except ValueError:
+        relative = path
+    if len(relative.parts) >= 2 and relative.parent.name:
+        parent = relative.parent.name
+        if parent != source_folder_name(str(relative)):
+            return parent
+    stem = path.stem
+    prefix = f"{source_name}_"
+    return stem[len(prefix):] if stem.startswith(prefix) else stem
+
+
+def archived_source_size(job: BatchJob, filename: str) -> dict[str, int]:
+    archived = find_archived_original(job, filename)
+    if archived is None:
+        return {"width": 0, "height": 0}
+    try:
+        with Image.open(BytesIO(archived[1])) as image:
+            return {"width": image.width, "height": image.height}
+    except OSError:
+        return {"width": 0, "height": 0}
 
 
 async def analyze_upload(image: UploadFile, provider_name: str | None = None) -> PoseAnalysis:
@@ -783,6 +943,60 @@ async def rerun_batch_job(
         output_dir=str(rerun_root),
         pose_provider=source_job.poseProvider,
     )
+
+
+@app.post("/api/batch-jobs/{job_id}/images/{filename:path}/regenerate-view", response_model=BatchJobResponse)
+async def regenerate_batch_job_image_with_view(
+    job_id: str,
+    filename: str,
+    update: RegenerateViewUpdate,
+) -> BatchJobResponse:
+    job = get_batch_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Batch job not found")
+
+    archived = find_archived_original(job, filename)
+    if archived is None:
+        raise HTTPException(status_code=400, detail="原图未归档，无法按修正朝向重生成。")
+    source_path, raw = archived
+
+    scenes = load_scenes()
+    scene = next((item for item in scenes if item.id == job.sceneId), None)
+    if scene is None:
+        raise HTTPException(status_code=404, detail="Scene not found")
+    presets_by_id = {preset.id: preset for preset in load_presets()}
+    bound_ids = [
+        binding.presetId
+        for binding in scene.presets
+        if binding.enabled
+    ] or scene.presetIds
+    crop_presets = [presets_by_id[preset_id] for preset_id in bound_ids if preset_id in presets_by_id]
+    if not crop_presets:
+        raise HTTPException(status_code=400, detail="场景没有可用预设，请先在场景管理中绑定预设。")
+
+    job_dir = Path(job.outputDir).expanduser()
+    if not job_dir.exists() or not job_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Output directory not found")
+
+    remove_existing_outputs_for_source(job_dir, source_path)
+    upload = UploadFile(file=BytesIO(raw), filename=source_path)
+    try:
+        result = await process_upload_to_output_dir(
+            upload,
+            crop_presets,
+            job_dir,
+            job.id,
+            job.poseProvider,
+            source_path=source_path,
+            view_angle_override=update.viewAngle,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    updated_job = append_batch_job(replace_batch_job_image_result(job, result))
+    return BatchJobResponse(job=updated_job, images=[result])
 
 
 async def _batch_job_events(

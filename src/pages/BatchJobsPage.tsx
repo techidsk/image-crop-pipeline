@@ -32,13 +32,16 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import type { UploadFile } from "antd/es/upload/interface";
 import { CropCard } from "../components/CropCard";
+import { viewAngleLabels } from "../constants";
+import { fetchBatchJobDetail } from "../api/presets";
 import type {
   BatchJob,
   BatchJobImage,
   CropScene,
   PoseProviderId,
   ProcessResponse,
-  ReviewStatus
+  ReviewStatus,
+  ViewAngle
 } from "../types";
 
 const { Title, Text } = Typography;
@@ -54,6 +57,7 @@ type BatchJobsPageProps = {
   openOutputDirEnabled: boolean;
   onJobCreated: (job: BatchJob) => void;
   onJobUpdated: (job: BatchJob) => void;
+  onJobsRefresh: () => Promise<void>;
 };
 
 type StreamEvent =
@@ -88,7 +92,13 @@ const REVIEW_META: Record<ReviewStatus, { label: string; color: string }> = {
   rejected: { label: "异常", color: "red" }
 };
 
-export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled, onJobCreated, onJobUpdated }: BatchJobsPageProps) {
+const viewAngleOptions: Array<{ label: string; value: ViewAngle }> = [
+  { label: viewAngleLabels.front, value: "front" },
+  { label: viewAngleLabels.side, value: "side" },
+  { label: viewAngleLabels.back, value: "back" }
+];
+
+export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled, onJobCreated, onJobUpdated, onJobsRefresh }: BatchJobsPageProps) {
   const { message } = App.useApp();
   const activeScenes = scenes.filter((scene) => scene.status !== "archived");
   const [sceneId, setSceneId] = useState(activeScenes[0]?.id ?? "");
@@ -100,12 +110,22 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
   const [activeResult, setActiveResult] = useState(0);
   const [progress, setProgress] = useState<RunProgress | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [loadingJobId, setLoadingJobId] = useState("");
+  const [isRefreshingJobs, setIsRefreshingJobs] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [correctedAngles, setCorrectedAngles] = useState<Record<string, Record<string, ViewAngle>>>({});
 
   const selectedScene = activeScenes.find((scene) => scene.id === sceneId) ?? activeScenes[0];
   const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? jobs[0];
   const selectedResults = selectedJob ? resultsByJob[selectedJob.id] ?? [] : [];
-  const active = selectedResults[activeResult];
+  const selectedImage = selectedJob?.images[activeResult] ?? selectedJob?.images[0];
+  const active = selectedImage
+    ? selectedResults.find((result) => result.filename === selectedImage.filename)
+    : selectedResults[activeResult];
+  const activeFilename = selectedImage?.filename ?? active?.filename;
+  const activeCorrectedAngle: ViewAngle = selectedJob && activeFilename
+    ? correctedAngles[selectedJob.id]?.[activeFilename] ?? active?.viewAngle ?? "front"
+    : "front";
   const rerunnableFiles = useMemo(() => filesForRerun(files, selectedJob), [files, selectedJob]);
   const inputFolders = useMemo(() => getInputFolders(files), [files]);
   const outputPreviewRows = useMemo(
@@ -120,6 +140,11 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
   useEffect(() => {
     if (!selectedJobId && jobs[0]) setSelectedJobId(jobs[0].id);
   }, [jobs, selectedJobId]);
+
+  useEffect(() => {
+    if (!selectedJobId || resultsByJob[selectedJobId]) return;
+    void loadJobDetail(selectedJobId);
+  }, [selectedJobId, resultsByJob]);
 
   const fileList = useMemo<UploadFile[]>(
     () =>
@@ -207,6 +232,63 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
       }
     } catch (err) {
       void message.error(err instanceof Error ? err.message : "重跑任务失败");
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const loadJobDetail = async (jobId: string) => {
+    setLoadingJobId(jobId);
+    try {
+      const detail = await fetchBatchJobDetail(jobId);
+      setResultsByJob((current) => ({ ...current, [detail.job.id]: detail.images.map(withImageUrlCacheBust).filter(Boolean) as ProcessResponse[] }));
+      onJobUpdated(detail.job);
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : "任务详情加载失败");
+    } finally {
+      setLoadingJobId((current) => (current === jobId ? "" : current));
+    }
+  };
+
+  const refreshJobs = async () => {
+    setIsRefreshingJobs(true);
+    try {
+      await onJobsRefresh();
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : "任务记录刷新失败");
+    } finally {
+      setIsRefreshingJobs(false);
+    }
+  };
+
+  const regenerateSelectedImageWithView = async () => {
+    if (!selectedJob || !activeFilename) return;
+    setIsRunning(true);
+    try {
+      const response = await fetch(
+        `/api/batch-jobs/${encodeURIComponent(selectedJob.id)}/images/${encodeURIComponent(activeFilename)}/regenerate-view`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ viewAngle: activeCorrectedAngle })
+        }
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail ?? "按修正朝向重生成失败");
+      }
+      const body = (await response.json()) as { job: BatchJob; images: ProcessResponse[] };
+      const result = withImageUrlCacheBust(body.images[0]);
+      if (!result) throw new Error("重生成没有返回裁切结果");
+      setResultsByJob((current) => {
+        const existing = current[body.job.id] ?? [];
+        const replaced = existing.filter((item) => item.filename !== result.filename);
+        return { ...current, [body.job.id]: [...replaced, result] };
+      });
+      onJobUpdated(body.job);
+      void message.success(`已按${viewAngleLabels[activeCorrectedAngle]}重生成`);
+    } catch (err) {
+      void message.error(err instanceof Error ? err.message : "按修正朝向重生成失败");
     } finally {
       setIsRunning(false);
     }
@@ -630,6 +712,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
         <Card
           size="small"
           title={selectedJob ? selectedJob.sceneName : "任务详情"}
+          loading={Boolean(selectedJob && loadingJobId === selectedJob.id)}
           extra={
             selectedJob && (
               <Space>
@@ -675,7 +758,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                 job={selectedJob}
                 activeFilename={active?.filename}
                 onSelect={(filename) => {
-                  const index = selectedResults.findIndex((result) => result.filename === filename);
+                  const index = selectedJob.images.findIndex((image) => image.filename === filename);
                   setActiveResult(Math.max(0, index));
                 }}
                 onReview={(filename, reviewStatus) =>
@@ -686,8 +769,37 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                 {active ? (
                   <Space orientation="vertical" size={8} style={{ width: "100%" }}>
                     <Flex align="center" justify="space-between">
-                      <Text strong>{active.filename}</Text>
-                      <Text type="secondary">{active.crops.length} 张输出</Text>
+                      <Space size={8} wrap>
+                        <Text strong>{active.filename}</Text>
+                        <Tag color="cyan">{viewAngleLabels[active.viewAngle]}</Tag>
+                        <Text type="secondary">{active.crops.length} 张输出</Text>
+                      </Space>
+                      <Space>
+                        <Select
+                          size="small"
+                          value={activeCorrectedAngle}
+                          style={{ width: 96 }}
+                          options={viewAngleOptions}
+                          onChange={(value) => {
+                            if (!selectedJob || !activeFilename) return;
+                            setCorrectedAngles((current) => ({
+                              ...current,
+                              [selectedJob.id]: {
+                                ...(current[selectedJob.id] ?? {}),
+                                [activeFilename]: value
+                              }
+                            }));
+                          }}
+                        />
+                        <Button
+                          size="small"
+                          icon={<ReloadOutlined />}
+                          loading={isRunning}
+                          onClick={regenerateSelectedImageWithView}
+                        >
+                          按修正朝向重生成
+                        </Button>
+                      </Space>
                     </Flex>
                     <div
                       style={{
@@ -706,10 +818,43 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
                     </div>
                   </Space>
                 ) : (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="历史任务只保留任务明细；当前页面执行的任务会显示裁切预览"
-                  />
+                  <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                    {activeFilename && (
+                      <Flex align="center" justify="space-between">
+                        <Text strong>{activeFilename}</Text>
+                        <Space>
+                          <Select
+                            size="small"
+                            value={activeCorrectedAngle}
+                            style={{ width: 96 }}
+                            options={viewAngleOptions}
+                            onChange={(value) => {
+                              if (!selectedJob || !activeFilename) return;
+                              setCorrectedAngles((current) => ({
+                                ...current,
+                                [selectedJob.id]: {
+                                  ...(current[selectedJob.id] ?? {}),
+                                  [activeFilename]: value
+                                }
+                              }));
+                            }}
+                          />
+                          <Button
+                            size="small"
+                            icon={<ReloadOutlined />}
+                            loading={isRunning}
+                            onClick={regenerateSelectedImageWithView}
+                          >
+                            按修正朝向重生成
+                          </Button>
+                        </Space>
+                      </Flex>
+                    )}
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="历史任务可按修正朝向重生成；生成后会显示裁切预览"
+                    />
+                  </Space>
                 )}
               </div>
             </div>
@@ -721,7 +866,19 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
         <Card
           size="small"
           title="任务记录"
-          extra={<Text type="secondary">{jobs.length} 条</Text>}
+          extra={
+            <Space>
+              <Text type="secondary">{jobs.length} 条</Text>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                loading={isRefreshingJobs}
+                onClick={() => void refreshJobs()}
+              >
+                刷新
+              </Button>
+            </Space>
+          }
         >
           <Table
             rowKey="id"
@@ -731,7 +888,10 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
             pagination={{ pageSize: 10, hideOnSinglePage: true, size: "small" }}
             rowClassName={(job) => (selectedJob?.id === job.id ? "row-highlight" : "")}
             onRow={(job) => ({
-              onClick: () => setSelectedJobId(job.id),
+              onClick: () => {
+                setSelectedJobId(job.id);
+                if (!resultsByJob[job.id]) void loadJobDetail(job.id);
+              },
               style: { cursor: "pointer" }
             })}
             locale={{ emptyText: <Empty description="暂无任务记录" /> }}
@@ -745,7 +905,7 @@ export function BatchJobsPage({ scenes, jobs, poseProvider, openOutputDirEnabled
 function ProgressPanel({ progress }: { progress: RunProgress }) {
   const percent = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
   return (
-    <Card size="small" type="inner" title={progress.jobId || "任务准备中"} extra={<Text type="secondary">{progress.completed}/{progress.total}</Text>}>
+        <Card size="small" type="inner" title={progress.jobId || "任务准备中"} extra={<Text type="secondary">{progress.completed}/{progress.total}</Text>}>
       <Space orientation="vertical" size={8} style={{ width: "100%" }}>
         <Progress percent={percent} size="small" status={percent === 100 ? "success" : "active"} />
         <Flex align="center" justify="space-between">
@@ -856,6 +1016,18 @@ function filesForRerun(files: File[], job?: BatchJob): File[] {
       .map((image) => image.filename)
   );
   return files.filter((file) => targets.has(getFileRelativePath(file)) || targets.has(file.name));
+}
+
+function withImageUrlCacheBust(result: ProcessResponse | undefined): ProcessResponse | undefined {
+  if (!result) return result;
+  const version = Date.now();
+  return {
+    ...result,
+    crops: result.crops.map((crop) => ({
+      ...crop,
+      imageUrl: crop.imageUrl ? `${crop.imageUrl}${crop.imageUrl.includes("?") ? "&" : "?"}v=${version}` : crop.imageUrl
+    }))
+  };
 }
 
 function getFileRelativePath(file: File): string {

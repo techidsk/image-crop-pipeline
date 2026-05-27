@@ -164,3 +164,7 @@ class BatchJobResponse(BaseModel):
 
 class ReviewStatusUpdate(BaseModel):
     reviewStatus: ReviewStatus
+
+
+class RegenerateViewUpdate(BaseModel):
+    viewAngle: ViewAngle

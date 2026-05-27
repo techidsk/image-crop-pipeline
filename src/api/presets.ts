@@ -1,4 +1,4 @@
-import type { BatchJob, CropPreset, CropScene } from "../types";
+import type { BatchJob, CropPreset, CropScene, ProcessResponse } from "../types";
 
 export async function fetchPresets() {
   const response = await fetch("/api/presets");
@@ -42,6 +42,12 @@ export async function fetchBatchJobs() {
   const response = await fetch("/api/batch-jobs");
   if (!response.ok) throw new Error("任务记录加载失败");
   return (await response.json()) as BatchJob[];
+}
+
+export async function fetchBatchJobDetail(jobId: string) {
+  const response = await fetch(`/api/batch-jobs/${encodeURIComponent(jobId)}`);
+  if (!response.ok) throw new Error("任务详情加载失败");
+  return (await response.json()) as { job: BatchJob; images: ProcessResponse[] };
 }
 
 export type ServerConfig = {

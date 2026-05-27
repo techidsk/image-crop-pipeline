@@ -275,25 +275,20 @@ function classifyPoseView(result: PoseAnalysis): ViewAngle {
   const bodyScore = (leftScore + rightScore) / 2;
   const visibleFacePoints = countVisible(result, faceNames);
 
-  if (bodyScore >= 0.15 && (faceScore < 0.16 || visibleFacePoints <= 1)) return "back";
-
   const sideImbalance = Math.abs(leftScore - rightScore) / Math.max(leftScore, rightScore, 0.01);
-  if (sideImbalance >= 0.38) return "side";
-
   const leftShoulder = pointByName(result, "left_shoulder");
   const rightShoulder = pointByName(result, "right_shoulder");
   const leftHip = pointByName(result, "left_hip");
   const rightHip = pointByName(result, "right_hip");
-  const nose = pointByName(result, "nose");
+  let shoulderRatio: number | null = null;
   if (leftShoulder && rightShoulder && leftHip && rightHip) {
     const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
     const bodyHeight = Math.max(1, Math.abs((leftHip.y + rightHip.y) / 2 - (leftShoulder.y + rightShoulder.y) / 2));
-    if (shoulderWidth / bodyHeight < 0.45 && faceScore >= 0.16) return "side";
-    if (nose && nose.confidence >= 0.2 && shoulderWidth > 1) {
-      const shoulderCenter = (leftShoulder.x + rightShoulder.x) / 2;
-      if (Math.abs(nose.x - shoulderCenter) / shoulderWidth >= 0.22) return "side";
-    }
+    shoulderRatio = shoulderWidth / bodyHeight;
   }
+
+  if (bodyScore >= 0.15 && (sideImbalance >= 0.38 || (shoulderRatio !== null && shoulderRatio < 0.45))) return "side";
+  if (bodyScore >= 0.15 && (faceScore < 0.16 || visibleFacePoints <= 1)) return "back";
 
   return "front";
 }

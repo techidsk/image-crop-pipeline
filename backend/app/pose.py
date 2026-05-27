@@ -121,35 +121,30 @@ def classify_pose_view(pose: Pose, image: Image.Image | None = None) -> str:
     right_score = average_confidence(pose, right_names)
     body_score = (left_score + right_score) / 2
 
-    if body_score >= 0.15 and (face_score < 0.16 or visible_face_points <= 1):
-        return "back"
-
     side_imbalance = abs(left_score - right_score) / max(left_score, right_score, 0.01)
-    if side_imbalance >= 0.38:
-        return "side"
-
-    if image is not None and body_score >= 0.15 and side_imbalance <= 0.32:
-        face_skin_ratio = face_region_skin_ratio(image, pose)
-        if face_skin_ratio is not None and face_skin_ratio < 0.16:
-            return "back"
-
     left_shoulder = pose.point("left_shoulder")
     right_shoulder = pose.point("right_shoulder")
     left_hip = pose.point("left_hip")
     right_hip = pose.point("right_hip")
-    nose = pose.point("nose")
+    shoulder_ratio: float | None = None
     if left_shoulder and right_shoulder and left_hip and right_hip:
         shoulder_width = abs(left_shoulder.x - right_shoulder.x)
         body_height = max(
             1.0,
             abs(((left_hip.y + right_hip.y) / 2) - ((left_shoulder.y + right_shoulder.y) / 2)),
         )
-        if shoulder_width / body_height < 0.45 and face_score >= 0.16:
-            return "side"
-        if nose and nose.confidence >= 0.2 and shoulder_width > 1:
-            shoulder_center = (left_shoulder.x + right_shoulder.x) / 2
-            if abs(nose.x - shoulder_center) / shoulder_width >= 0.22:
-                return "side"
+        shoulder_ratio = shoulder_width / body_height
+
+    if body_score >= 0.15 and (side_imbalance >= 0.38 or (shoulder_ratio is not None and shoulder_ratio < 0.45)):
+        return "side"
+
+    if body_score >= 0.15 and (face_score < 0.16 or visible_face_points <= 1):
+        return "back"
+
+    if image is not None and body_score >= 0.15 and side_imbalance <= 0.32:
+        face_skin_ratio = face_region_skin_ratio(image, pose)
+        if face_skin_ratio is not None and face_skin_ratio < 0.16:
+            return "back"
 
     return "front"
 

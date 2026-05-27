@@ -74,11 +74,25 @@ class PaddlePersonAttributeViewClassifier:
 
 
 def classify_view(image: Image.Image, pose: Pose) -> ViewClassification:
+    pose_result = ViewClassification(angle=classify_pose_view(pose, image), provider="pose_rule")
     if os.getenv("VIEW_PROVIDER", "paddle").lower() in {"paddle", "paddle_person_attribute"}:
         paddle_result = paddle_person_attribute_classifier.classify(image, pose)
         if paddle_result is not None:
-            return paddle_result
-    return ViewClassification(angle=classify_pose_view(pose, image), provider="pose_rule")
+            return reconcile_view_classification(paddle_result, pose_result)
+    return pose_result
+
+
+def reconcile_view_classification(
+    model_result: ViewClassification,
+    pose_result: ViewClassification,
+) -> ViewClassification:
+    if pose_result.angle == "side" and model_result.angle != "side":
+        return pose_result
+    if model_result.angle == "side" and pose_result.angle != "side":
+        return pose_result
+    if model_result.angle == "back" and pose_result.angle == "front":
+        return pose_result
+    return model_result
 
 
 def person_crop(image: Image.Image, pose: Pose) -> Image.Image:

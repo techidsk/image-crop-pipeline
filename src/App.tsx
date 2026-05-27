@@ -88,6 +88,10 @@ export function App() {
     void loadServerConfig();
   }, []);
 
+  useEffect(() => {
+    if (view === "batchJobs") void loadJobs();
+  }, [view]);
+
   const allTags = useMemo(
     () => Array.from(new Set(presets.flatMap((preset) => preset.tags))).sort(),
     [presets]
@@ -255,6 +259,7 @@ export function App() {
                   openOutputDirEnabled={serverConfig?.features.openOutputDir ?? false}
                   onJobCreated={(job) => setJobs((current) => [job, ...current])}
                   onJobUpdated={updateJob}
+                  onJobsRefresh={loadJobs}
                 />
               }
             />

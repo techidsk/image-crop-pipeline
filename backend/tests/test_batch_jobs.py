@@ -5,10 +5,11 @@ from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from backend.app.main import app
-from backend.app import batch_store
-from backend.app.schemas import BatchJob, BatchJobImage
+from backend.app import batch_store, main
+from backend.app.schemas import BatchJob, BatchJobImage, CropPreset, CropScene
 
 
 @pytest.fixture()
@@ -147,3 +148,74 @@ def test_download_batch_job_output_rejects_missing_output_dir(isolated_batch_sto
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Output directory not found"
+
+
+def test_get_batch_job_detail_reconstructs_output_previews(isolated_batch_store, tmp_path, monkeypatch):
+    output_dir = tmp_path / "outputs" / "job-1"
+    crop_dir = output_dir / "front-only"
+    originals_dir = output_dir / "_originals"
+    crop_dir.mkdir(parents=True)
+    originals_dir.mkdir(parents=True)
+    Image.new("RGB", (80, 90), "white").save(crop_dir / "a_front-only.png")
+    Image.new("RGB", (1000, 1200), "white").save(originals_dir / "a.jpg")
+    batch_store.append_batch_job(make_job().model_copy(update={"outputDir": str(output_dir)}))
+    monkeypatch.setattr(
+        main,
+        "load_presets",
+        lambda: [CropPreset(id="front-only", name="Front", width=80, height=90, anchor="neck", viewAngles=["front"])],
+    )
+
+    response = TestClient(app).get("/api/batch-jobs/job-1")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job"]["id"] == "job-1"
+    assert body["images"][0]["filename"] == "a.jpg"
+    assert body["images"][0]["source"] == {"width": 1000, "height": 1200}
+    assert body["images"][0]["crops"][0]["presetId"] == "front-only"
+    assert body["images"][0]["crops"][0]["name"] == "Front"
+    assert body["images"][0]["crops"][0]["imageUrl"] == "/api/batch-jobs/job-1/files/front-only/a_front-only.png"
+
+
+def test_regenerate_batch_job_image_with_manual_view_uses_archived_original(isolated_batch_store, tmp_path, monkeypatch):
+    output_dir = tmp_path / "outputs" / "job-1"
+    originals_dir = output_dir / "_originals"
+    old_output_dir = output_dir / "front-only"
+    originals_dir.mkdir(parents=True)
+    old_output_dir.mkdir(parents=True)
+    image = Image.new("RGB", (1000, 1000), "white")
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG")
+    (originals_dir / "a.jpg").write_bytes(buffer.getvalue())
+    old_output = old_output_dir / "a_front-only.png"
+    old_output.write_bytes(b"old")
+
+    batch_store.append_batch_job(make_job().model_copy(update={"outputDir": str(output_dir)}))
+    monkeypatch.setattr(
+        main,
+        "load_scenes",
+        lambda: [CropScene(id="scene-1", name="Scene", presetIds=["front-only", "back-only"])],
+    )
+    monkeypatch.setattr(
+        main,
+        "load_presets",
+        lambda: [
+            CropPreset(id="front-only", name="Front", width=100, height=100, anchor="neck", viewAngles=["front"]),
+            CropPreset(id="back-only", name="Back", width=100, height=100, anchor="neck", viewAngles=["back"]),
+        ],
+    )
+
+    response = TestClient(app).post(
+        "/api/batch-jobs/job-1/images/a.jpg/regenerate-view",
+        json={"viewAngle": "back"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job"]["outputCount"] == 1
+    assert body["job"]["images"][0]["outputs"] == 1
+    assert body["job"]["images"][0]["reviewStatus"] == "pending_review"
+    assert body["images"][0]["viewAngle"] == "back"
+    assert [crop["presetId"] for crop in body["images"][0]["crops"]] == ["back-only"]
+    assert not old_output.exists()
+    assert (output_dir / "back-only" / "a_back-only.png").exists()

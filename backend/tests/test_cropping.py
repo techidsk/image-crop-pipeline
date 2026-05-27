@@ -10,7 +10,7 @@ from backend.app.image_utils import SRGB_PROFILE_BYTES, open_image_as_srgb
 from backend.app.main import detect_pose, presets_for_view
 from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
 from backend.app.schemas import CropPreset, PoseKeypoint
-from backend.app.view_classifier import parse_paddle_direction, parse_person_attribute_logits, person_crop
+from backend.app.view_classifier import ViewClassification, parse_paddle_direction, parse_person_attribute_logits, person_crop, reconcile_view_classification
 
 
 def test_crop_preset_normalizes_and_deduplicates_tags():
@@ -328,6 +328,85 @@ def test_classify_pose_view_side_for_asymmetric_body_confidence():
     )
 
     assert classify_pose_view(pose) == "side"
+
+
+def test_classify_pose_view_front_when_only_head_is_slightly_tilted():
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="left_shoulder", x=400, y=300, confidence=0.9),
+            PoseKeypoint(name="right_shoulder", x=600, y=300, confidence=0.9),
+            PoseKeypoint(name="left_elbow", x=350, y=430, confidence=0.9),
+            PoseKeypoint(name="right_elbow", x=650, y=430, confidence=0.9),
+            PoseKeypoint(name="left_wrist", x=330, y=560, confidence=0.9),
+            PoseKeypoint(name="right_wrist", x=670, y=560, confidence=0.9),
+            PoseKeypoint(name="left_hip", x=430, y=620, confidence=0.9),
+            PoseKeypoint(name="right_hip", x=570, y=620, confidence=0.9),
+            PoseKeypoint(name="left_knee", x=440, y=800, confidence=0.9),
+            PoseKeypoint(name="right_knee", x=560, y=800, confidence=0.9),
+            PoseKeypoint(name="left_ankle", x=450, y=960, confidence=0.9),
+            PoseKeypoint(name="right_ankle", x=550, y=960, confidence=0.9),
+            PoseKeypoint(name="nose", x=555, y=220, confidence=0.9),
+            PoseKeypoint(name="left_eye", x=540, y=205, confidence=0.9),
+            PoseKeypoint(name="right_eye", x=585, y=210, confidence=0.9),
+            PoseKeypoint(name="left_ear", x=520, y=225, confidence=0.9),
+            PoseKeypoint(name="right_ear", x=605, y=230, confidence=0.9),
+        ]
+    )
+
+    assert classify_pose_view(pose) == "front"
+
+
+def test_classify_pose_view_front_when_only_head_is_heavily_turned():
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="left_shoulder", x=400, y=300, confidence=0.9),
+            PoseKeypoint(name="right_shoulder", x=600, y=300, confidence=0.9),
+            PoseKeypoint(name="left_elbow", x=350, y=430, confidence=0.9),
+            PoseKeypoint(name="right_elbow", x=650, y=430, confidence=0.9),
+            PoseKeypoint(name="left_wrist", x=330, y=560, confidence=0.9),
+            PoseKeypoint(name="right_wrist", x=670, y=560, confidence=0.9),
+            PoseKeypoint(name="left_hip", x=430, y=620, confidence=0.9),
+            PoseKeypoint(name="right_hip", x=570, y=620, confidence=0.9),
+            PoseKeypoint(name="left_knee", x=440, y=800, confidence=0.9),
+            PoseKeypoint(name="right_knee", x=560, y=800, confidence=0.9),
+            PoseKeypoint(name="left_ankle", x=450, y=960, confidence=0.9),
+            PoseKeypoint(name="right_ankle", x=550, y=960, confidence=0.9),
+            PoseKeypoint(name="nose", x=575, y=220, confidence=0.9),
+            PoseKeypoint(name="left_eye", x=560, y=205, confidence=0.9),
+            PoseKeypoint(name="right_eye", x=600, y=210, confidence=0.9),
+            PoseKeypoint(name="left_ear", x=545, y=225, confidence=0.9),
+            PoseKeypoint(name="right_ear", x=620, y=230, confidence=0.9),
+        ]
+    )
+
+    assert classify_pose_view(pose) == "front"
+
+
+def test_classify_pose_view_side_for_narrow_body_profile():
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="left_shoulder", x=490, y=300, confidence=0.9),
+            PoseKeypoint(name="right_shoulder", x=560, y=300, confidence=0.9),
+            PoseKeypoint(name="left_hip", x=500, y=620, confidence=0.9),
+            PoseKeypoint(name="right_hip", x=550, y=620, confidence=0.9),
+            PoseKeypoint(name="left_knee", x=505, y=800, confidence=0.9),
+            PoseKeypoint(name="right_knee", x=545, y=800, confidence=0.9),
+            PoseKeypoint(name="nose", x=525, y=220, confidence=0.9),
+            PoseKeypoint(name="left_eye", x=515, y=205, confidence=0.9),
+        ]
+    )
+
+    assert classify_pose_view(pose) == "side"
+
+
+def test_reconcile_view_classification_uses_pose_body_evidence_over_side_model_result():
+    result = reconcile_view_classification(
+        ViewClassification(angle="side", provider="paddle_person_attribute", confidence=0.8),
+        ViewClassification(angle="front", provider="pose_rule"),
+    )
+
+    assert result.angle == "front"
+    assert result.provider == "pose_rule"
 
 
 def test_presets_for_view_keeps_matching_or_unrestricted_presets():
