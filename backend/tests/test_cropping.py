@@ -10,7 +10,16 @@ from backend.app.image_utils import SRGB_PROFILE_BYTES, open_image_as_srgb
 from backend.app.main import detect_pose, presets_for_view
 from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
 from backend.app.schemas import CropPreset, PoseKeypoint
-from backend.app.view_classifier import ViewClassification, parse_paddle_direction, parse_person_attribute_logits, person_crop, reconcile_view_classification
+from backend.app.view_classifier import (
+    ViewClassification,
+    densepose_part_counts,
+    parse_densepose_part_counts,
+    parse_paddle_direction,
+    parse_person_attribute_logits,
+    person_crop,
+    reconcile_densepose_classification,
+    reconcile_view_classification,
+)
 
 
 def test_crop_preset_normalizes_and_deduplicates_tags():
@@ -406,6 +415,38 @@ def test_reconcile_view_classification_uses_pose_body_evidence_over_side_model_r
     )
 
     assert result.angle == "front"
+    assert result.provider == "pose_rule"
+
+
+def test_densepose_part_counts_classifies_back_surface():
+    result = parse_densepose_part_counts({2: 120, 7: 80, 1: 20})
+
+    assert result is not None
+    assert result.angle == "back"
+    assert result.provider == "densepose"
+    assert result.confidence is not None and result.confidence > 0.7
+
+
+def test_densepose_result_parser_counts_nested_labels():
+    result = densepose_part_counts(
+        {
+            "instances": [
+                {"labels": [[1, 1, 2], [0, 2, 2]]},
+                {"labels": [[7, 7], [7, 0]]},
+            ]
+        }
+    )
+
+    assert result == {1: 2, 2: 3, 7: 3}
+
+
+def test_reconcile_densepose_keeps_pose_side_evidence():
+    result = reconcile_densepose_classification(
+        ViewClassification(angle="back", provider="densepose", confidence=0.9),
+        ViewClassification(angle="side", provider="pose_rule"),
+    )
+
+    assert result.angle == "side"
     assert result.provider == "pose_rule"
 
 

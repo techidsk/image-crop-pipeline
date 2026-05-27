@@ -165,3 +165,22 @@ $env:RTMW_MODEL="akore/rtmw-l-384x288"
 ```
 
 当前 RTMW provider 会把整张图作为单人主体输入模型，适合单人或主体人物明显的图片。裁切训练和后端语义构图会优先使用身体主干点，例如头、肩、肘、腕、胯、膝、踝，避免 whole-body 的手指或脸部细点把 bbox 拉偏。后续如果需要多人图，可以再接人体检测器，并在前端加入主体人物选择。
+
+## 人物朝向识别
+
+后端会先用姿态点规则判断 `front` / `side` / `back`，再按 `VIEW_PROVIDER` 配置叠加可选模型证据。默认值是：
+
+```env
+VIEW_PROVIDER=densepose,paddle
+```
+
+DensePose 是可选增强，不会成为服务启动的硬依赖。配置 `DENSEPOSE_CONFIG` 和 `DENSEPOSE_WEIGHTS` 后，后端会懒加载本机已安装的 Detectron2/DensePose，并用 IUV 部件分布修正前/后判断；如果 DensePose 未安装、未配置或推理失败，会自动回退到 Paddle person attribute 和姿态点规则。侧身仍以姿态点几何证据优先，避免 DensePose 的前/背部件把窄侧身误判成正面或背面。
+
+```env
+DENSEPOSE_CONFIG=/path/to/densepose_config.yaml
+DENSEPOSE_WEIGHTS=/path/to/model.pkl
+DENSEPOSE_DEVICE=cpu
+DENSEPOSE_SCORE_THRESHOLD=0.7
+DENSEPOSE_FRONT_PARTS=
+DENSEPOSE_BACK_PARTS=
+```

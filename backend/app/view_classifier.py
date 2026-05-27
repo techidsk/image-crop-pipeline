@@ -1,6 +1,7 @@
 import os
 import tarfile
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,22 @@ from .schemas import PoseKeypoint, ViewAngle
 
 VIEW_CLASSIFY_MAX_SIDE = int(os.getenv("VIEW_CLASSIFY_MAX_SIDE", "768"))
 PADDLE_PERSON_ATTRIBUTE_URL = "https://paddleclas.bj.bcebos.com/models/PULC/inference/person_attribute_infer.tar"
+DENSEPOSE_MIN_PIXELS = int(os.getenv("DENSEPOSE_MIN_PIXELS", "80"))
+DENSEPOSE_MIN_CONFIDENCE = float(os.getenv("DENSEPOSE_MIN_CONFIDENCE", "0.35"))
+
+
+def parse_densepose_parts_env(name: str, default: set[int]) -> set[int]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return {int(value.strip()) for value in raw.split(",") if value.strip()}
+    except ValueError:
+        return default
+
+
+DENSEPOSE_FRONT_PARTS = parse_densepose_parts_env("DENSEPOSE_FRONT_PARTS", {1, 9, 10, 13, 14, 17, 18, 21, 22, 23})
+DENSEPOSE_BACK_PARTS = parse_densepose_parts_env("DENSEPOSE_BACK_PARTS", {2, 7, 8, 11, 12, 15, 16, 19, 20, 24})
 
 
 @dataclass(frozen=True)
@@ -73,13 +90,94 @@ class PaddlePersonAttributeViewClassifier:
         return self._predictor
 
 
+class DensePoseViewClassifier:
+    """Optional DensePose IUV classifier loaded only when configured."""
+
+    def __init__(self) -> None:
+        self._predictor: Any | None = None
+        self._extractor: Any | None = None
+        self._load_attempted = False
+
+    def classify(self, image: Image.Image, pose: Pose) -> ViewClassification | None:
+        predictor = self._load_predictor()
+        if predictor is None or self._extractor is None:
+            return None
+
+        try:
+            import numpy as np
+
+            crop = person_crop(image, pose)
+            rgb = np.asarray(crop.convert("RGB"))
+            bgr = np.ascontiguousarray(rgb[:, :, ::-1])
+            instances = predictor(bgr).get("instances")
+            if instances is None or len(instances) == 0:
+                return None
+            part_counts = densepose_part_counts(self._extractor(instances))
+            return parse_densepose_part_counts(part_counts)
+        except Exception:
+            return None
+
+    def _load_predictor(self):
+        if self._predictor is not None:
+            return self._predictor
+        if self._load_attempted:
+            return None
+        self._load_attempted = True
+
+        config_path = os.getenv("DENSEPOSE_CONFIG")
+        weights_path = os.getenv("DENSEPOSE_WEIGHTS")
+        if not config_path or not weights_path:
+            return None
+
+        try:
+            from densepose import add_densepose_config
+            from densepose.vis.extractor import DensePoseResultExtractor
+            from detectron2.config import get_cfg
+            from detectron2.engine import DefaultPredictor
+        except Exception:
+            return None
+
+        try:
+            cfg = get_cfg()
+            add_densepose_config(cfg)
+            cfg.merge_from_file(config_path)
+            cfg.MODEL.WEIGHTS = weights_path
+            cfg.MODEL.DEVICE = os.getenv("DENSEPOSE_DEVICE", "cpu")
+            cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = float(os.getenv("DENSEPOSE_SCORE_THRESHOLD", "0.7"))
+            self._predictor = DefaultPredictor(cfg)
+            self._extractor = DensePoseResultExtractor()
+        except Exception:
+            return None
+        return self._predictor
+
+
 def classify_view(image: Image.Image, pose: Pose) -> ViewClassification:
     pose_result = ViewClassification(angle=classify_pose_view(pose, image), provider="pose_rule")
-    if os.getenv("VIEW_PROVIDER", "paddle").lower() in {"paddle", "paddle_person_attribute"}:
+    providers = {
+        value.strip()
+        for value in os.getenv("VIEW_PROVIDER", "densepose,paddle").lower().replace(";", ",").split(",")
+        if value.strip()
+    }
+    if providers & {"densepose", "dense_pose"}:
+        densepose_result = densepose_view_classifier.classify(image, pose)
+        if densepose_result is not None:
+            return reconcile_densepose_classification(densepose_result, pose_result)
+    if providers & {"paddle", "paddle_person_attribute"}:
         paddle_result = paddle_person_attribute_classifier.classify(image, pose)
         if paddle_result is not None:
             return reconcile_view_classification(paddle_result, pose_result)
     return pose_result
+
+
+def reconcile_densepose_classification(
+    densepose_result: ViewClassification,
+    pose_result: ViewClassification,
+) -> ViewClassification:
+    if pose_result.angle == "side" or densepose_result.angle == "side":
+        return pose_result
+    if densepose_result.confidence is not None and densepose_result.confidence < DENSEPOSE_MIN_CONFIDENCE:
+        return pose_result
+    return densepose_result
 
 
 def reconcile_view_classification(
@@ -93,6 +191,59 @@ def reconcile_view_classification(
     if model_result.angle == "back" and pose_result.angle == "front":
         return pose_result
     return model_result
+
+
+def parse_densepose_part_counts(part_counts: dict[int, int]) -> ViewClassification | None:
+    front_pixels = sum(part_counts.get(part, 0) for part in DENSEPOSE_FRONT_PARTS)
+    back_pixels = sum(part_counts.get(part, 0) for part in DENSEPOSE_BACK_PARTS)
+    relevant_pixels = front_pixels + back_pixels
+    if relevant_pixels < DENSEPOSE_MIN_PIXELS:
+        return None
+
+    confidence = abs(front_pixels - back_pixels) / relevant_pixels
+    if confidence < DENSEPOSE_MIN_CONFIDENCE:
+        return None
+    angle: ViewAngle = "front" if front_pixels > back_pixels else "back"
+    return ViewClassification(angle=angle, provider="densepose", confidence=confidence)
+
+
+def densepose_part_counts(result: Any) -> dict[int, int]:
+    counts: dict[int, int] = {}
+    for label_array in iter_densepose_labels(result):
+        for label, count in densepose_label_histogram(label_array).items():
+            if label <= 0:
+                continue
+            counts[label] = counts.get(label, 0) + count
+    return counts
+
+
+def iter_densepose_labels(value: Any) -> Iterable[Any]:
+    if value is None:
+        return
+    if isinstance(value, dict):
+        for key in ("labels", "i", "I"):
+            if key in value:
+                yield value[key]
+        for item in value.values():
+            yield from iter_densepose_labels(item)
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from iter_densepose_labels(item)
+        return
+    for attr in ("labels", "i", "I"):
+        if hasattr(value, attr):
+            yield getattr(value, attr)
+
+
+def densepose_label_histogram(labels: Any) -> dict[int, int]:
+    import numpy as np
+
+    array = np.asarray(labels)
+    if array.size == 0:
+        return {}
+    values, counts = np.unique(array.astype("int32"), return_counts=True)
+    return {int(value): int(count) for value, count in zip(values, counts)}
 
 
 def person_crop(image: Image.Image, pose: Pose) -> Image.Image:
@@ -239,3 +390,4 @@ def flatten_output(value: Any):
 
 
 paddle_person_attribute_classifier = PaddlePersonAttributeViewClassifier()
+densepose_view_classifier = DensePoseViewClassifier()
