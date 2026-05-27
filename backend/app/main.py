@@ -1,5 +1,6 @@
-import json
 import base64
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -61,6 +62,26 @@ from .view_classifier import classify_view
 
 app = FastAPI(title="OpenPose Crop Pipeline")
 POSE_DETECT_MAX_SIDE = int(os.getenv("POSE_DETECT_MAX_SIDE", "1280"))
+ANALYZE_BODY_KEYPOINTS = {
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "neck",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+}
 
 
 def _open_output_dir_enabled() -> bool:
@@ -124,6 +145,13 @@ def pose_confidence(keypoints) -> float:
     if not points:
         return 0.0
     return sorted(point.confidence for point in points)[len(points) // 2]
+
+
+def response_keypoints(pose: Pose, scope: str = "full"):
+    normalized_scope = (scope or "full").strip().lower()
+    if normalized_scope in {"body", "body_only", "compact"}:
+        return [point for point in pose.keypoints if point.name in ANALYZE_BODY_KEYPOINTS]
+    return pose.keypoints
 
 
 def safe_filename(value: str) -> str:
@@ -437,7 +465,8 @@ async def process_upload(
 
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_angle = view_angle_override or classify_view(source_image, pose).angle
+    view_classification = classify_view(source_image, pose)
+    view_angle = view_angle_override or view_classification.angle
     matched_presets = presets_for_view(crop_presets, view_angle)
     try:
         crops = [make_crop(source_image, pose, preset) for preset in matched_presets]
@@ -448,6 +477,9 @@ async def process_upload(
         filename=image.filename,
         source={"width": source_image.width, "height": source_image.height},
         viewAngle=view_angle,
+        poseProvider=actual_provider,
+        viewProvider="manual_override" if view_angle_override else view_classification.provider,
+        viewConfidence=None if view_angle_override else view_classification.confidence,
         keypoints=pose.keypoints,
         crops=crops,
     )
@@ -568,6 +600,9 @@ def load_batch_job_results(job: BatchJob) -> list[ProcessResponse]:
                 filename=image_report.filename,
                 source=source,
                 viewAngle="front",
+                poseProvider=job.poseProvider,
+                viewProvider=None,
+                viewConfidence=None,
                 keypoints=[],
                 crops=crops,
             )
@@ -642,7 +677,11 @@ def archived_source_size(job: BatchJob, filename: str) -> dict[str, int]:
         return {"width": 0, "height": 0}
 
 
-async def analyze_upload(image: UploadFile, provider_name: str | None = None) -> PoseAnalysis:
+async def analyze_upload(
+    image: UploadFile,
+    provider_name: str | None = None,
+    keypoint_scope: str = "body",
+) -> PoseAnalysis:
     try:
         raw = await image.read()
         source_image = open_image_as_srgb(BytesIO(raw))
@@ -651,12 +690,15 @@ async def analyze_upload(image: UploadFile, provider_name: str | None = None) ->
 
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_angle = classify_view(source_image, pose).angle
+    view_classification = classify_view(source_image, pose)
     return PoseAnalysis(
         filename=image.filename,
         source={"width": source_image.width, "height": source_image.height},
-        viewAngle=view_angle,
-        keypoints=pose.keypoints,
+        viewAngle=view_classification.angle,
+        poseProvider=actual_provider,
+        viewProvider=view_classification.provider,
+        viewConfidence=view_classification.confidence,
+        keypoints=response_keypoints(pose, keypoint_scope),
     )
 
 
@@ -675,15 +717,18 @@ async def create_training_sample(
     suffix = await save_upload_image(preset_id, sample_id, image, raw)
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_angle = classify_view(source_image, pose).angle
+    view_classification = classify_view(source_image, pose)
     confidence = pose_confidence(pose.keypoints)
     return TrainingSample(
         id=sample_id,
         filename=image.filename or "image",
         imageUrl=sample_image_url(preset_id, sample_id, suffix),
+        imageHash=hashlib.sha256(raw).hexdigest(),
         source={"width": source_image.width, "height": source_image.height},
         keypoints=pose.keypoints,
-        viewAngle=view_angle,
+        viewAngle=view_classification.angle,
+        viewProvider=view_classification.provider,
+        viewConfidence=view_classification.confidence,
         poseProvider=actual_provider,
         crop={
             "left": 0,
@@ -719,13 +764,15 @@ def reanalyze_training_samples(
             next_samples.append(sample)
             continue
         pose = detect_pose(actual_provider, source_image)
-        view_angle = classify_view(source_image, pose).angle
+        view_classification = classify_view(source_image, pose)
         next_samples.append(
             sample.model_copy(
                 update={
                     "source": {"width": source_image.width, "height": source_image.height},
                     "keypoints": pose.keypoints,
-                    "viewAngle": view_angle,
+                    "viewAngle": view_classification.angle,
+                    "viewProvider": view_classification.provider,
+                    "viewConfidence": view_classification.confidence,
                     "poseProvider": actual_provider,
                     "confidence": pose_confidence(pose.keypoints),
                 }
@@ -1260,8 +1307,11 @@ async def rerun_batch_job_all(job_id: str) -> StreamingResponse:
 async def analyze_poses(
     images: list[UploadFile] = File(...),
     pose_provider: str = Form("rtmw"),
+    keypoint_scope: str = Form("body"),
 ) -> PoseAnalysisBatchResponse:
-    return PoseAnalysisBatchResponse(images=[await analyze_upload(image, pose_provider) for image in images])
+    return PoseAnalysisBatchResponse(
+        images=[await analyze_upload(image, pose_provider, keypoint_scope) for image in images]
+    )
 
 
 @app.get("/api/presets/{preset_id}/training-samples", response_model=TrainingSampleBatchResponse)

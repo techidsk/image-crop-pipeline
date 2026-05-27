@@ -1,6 +1,7 @@
 export type AppView = "batch" | "viewTest" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
 export type PoseProviderId = "rtmw" | "heuristic";
 export type ViewAngle = "front" | "side" | "back";
+export type ViewProviderId = "densepose" | "paddle_person_attribute" | "pose_rule" | "manual_override" | string;
 export type ReviewStatus = "pending_review" | "approved" | "rejected";
 
 export type CropStrategy = "anchor_center" | "anchor_top" | "full_height" | "learned_composition" | "pose_semantic_composition";
@@ -61,6 +62,9 @@ export type ProcessResponse = {
   filename?: string;
   source: { width: number; height: number };
   viewAngle: ViewAngle;
+  poseProvider?: PoseProviderId | "unknown" | string | null;
+  viewProvider?: ViewProviderId | null;
+  viewConfidence?: number | null;
   keypoints: Array<{ name: string; x: number; y: number; confidence: number }>;
   crops: CropResult[];
 };
@@ -71,6 +75,9 @@ export type PoseAnalysis = {
   filename?: string;
   source: { width: number; height: number };
   viewAngle?: ViewAngle;
+  poseProvider?: PoseProviderId | "unknown" | string | null;
+  viewProvider?: ViewProviderId | null;
+  viewConfidence?: number | null;
   keypoints: PoseKeypoint[];
 };
 
@@ -83,6 +90,8 @@ export type TrainingSample = {
   source: { width: number; height: number };
   keypoints: PoseKeypoint[];
   viewAngle?: ViewAngle;
+  viewProvider?: ViewProviderId | null;
+  viewConfidence?: number | null;
   crop: { left: number; top: number; width: number; height: number };
   poseProvider?: PoseProviderId | "unknown";
   confidence: number;

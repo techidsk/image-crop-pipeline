@@ -75,6 +75,9 @@ class ProcessResponse(BaseModel):
     filename: str | None = None
     source: dict[str, int]
     viewAngle: ViewAngle
+    poseProvider: str | None = None
+    viewProvider: str | None = None
+    viewConfidence: float | None = None
     keypoints: list[PoseKeypoint]
     crops: list[CropResult]
 
@@ -87,6 +90,9 @@ class PoseAnalysis(BaseModel):
     filename: str | None = None
     source: dict[str, int]
     viewAngle: ViewAngle
+    poseProvider: str | None = None
+    viewProvider: str | None = None
+    viewConfidence: float | None = None
     keypoints: list[PoseKeypoint]
 
 
@@ -109,6 +115,8 @@ class TrainingSample(BaseModel):
     source: dict[str, int]
     keypoints: list[PoseKeypoint]
     viewAngle: ViewAngle = "front"
+    viewProvider: str | None = None
+    viewConfidence: float | None = None
     crop: TrainingCrop
     poseProvider: str = "unknown"
     confidence: float = 0

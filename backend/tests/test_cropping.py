@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from backend.app.cropping import make_crop, person_bounds
 from backend.app.image_utils import SRGB_PROFILE_BYTES, open_image_as_srgb
-from backend.app.main import detect_pose, presets_for_view
+from backend.app.main import detect_pose, presets_for_view, response_keypoints
 from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
 from backend.app.schemas import CropPreset, PoseKeypoint
 from backend.app.view_classifier import (
@@ -467,6 +467,25 @@ def test_detect_pose_maps_resized_detection_back_to_source_coordinates():
     assert nose is not None
     assert nose.x == 2000
     assert nose.y == 660
+
+
+def test_response_keypoints_body_scope_excludes_wholebody_detail_points():
+    pose = Pose(
+        keypoints=[
+            PoseKeypoint(name="nose", x=10, y=10, confidence=0.9),
+            PoseKeypoint(name="left_shoulder", x=20, y=30, confidence=0.9),
+            PoseKeypoint(name="left_hand_1", x=40, y=50, confidence=0.9),
+            PoseKeypoint(name="face_1", x=60, y=70, confidence=0.9),
+        ]
+    )
+
+    assert [point.name for point in response_keypoints(pose, "body")] == ["nose", "left_shoulder"]
+    assert [point.name for point in response_keypoints(pose, "full")] == [
+        "nose",
+        "left_shoulder",
+        "left_hand_1",
+        "face_1",
+    ]
 
 
 def test_parse_paddle_direction_from_nested_attribute_output():

@@ -64,6 +64,7 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
       const formData = new FormData();
       previews.forEach((preview) => formData.append("images", preview.file));
       formData.append("pose_provider", poseProvider);
+      formData.append("keypoint_scope", "body");
       const response = await fetch("/api/analyze-poses", { method: "POST", body: formData });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -182,10 +183,17 @@ export function ViewTestPage({ poseProvider }: ViewTestPageProps) {
                 <Tag color={VIEW_COLORS[activeViewAngle]} style={{ padding: "2px 10px" }}>
                   {viewAngleLabels[activeViewAngle]}
                 </Tag>
+                {activeResult.viewProvider && (
+                  <Tag>
+                    {viewProviderLabel(activeResult.viewProvider)}
+                    {typeof activeResult.viewConfidence === "number" ? ` ${(activeResult.viewConfidence * 100).toFixed(0)}%` : ""}
+                  </Tag>
+                )}
                 <Title level={5} style={{ margin: 0 }}>{activeResult.filename ?? activePreview?.file.name}</Title>
               </Space>
               <Text type="secondary">
                 原图 {activeResult.source.width}x{activeResult.source.height} · {activeResult.keypoints.length} 个节点
+                {activeResult.poseProvider ? ` · 姿态: ${providerLabel(activeResult.poseProvider)}` : ""}
               </Text>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
                 <Statistic
@@ -222,6 +230,7 @@ function PosePreview({ previewUrl, result }: { previewUrl: string; result?: Pose
         <div style={{ position: "absolute", left: 12, top: 12 }}>
           <Tag color={VIEW_COLORS[viewAngle]} style={{ padding: "2px 10px" }}>
             识别结论：{viewAngleLabels[viewAngle]}
+            {result.viewProvider ? ` · ${viewProviderLabel(result.viewProvider)}` : ""}
           </Tag>
         </div>
       )}
@@ -315,7 +324,16 @@ function pointByName(result: PoseAnalysis, name: string): PoseKeypoint | undefin
   return result.keypoints.find((point) => point.name === name);
 }
 
-function providerLabel(provider: PoseProviderId) {
+function providerLabel(provider: PoseProviderId | string) {
   if (provider === "rtmw") return "RTMW-l";
-  return "旧方案";
+  if (provider === "heuristic") return "旧方案";
+  return provider;
+}
+
+function viewProviderLabel(provider: string) {
+  if (provider === "densepose") return "DensePose";
+  if (provider === "paddle_person_attribute") return "Paddle";
+  if (provider === "pose_rule") return "姿态规则";
+  if (provider === "manual_override") return "人工修正";
+  return provider;
 }
