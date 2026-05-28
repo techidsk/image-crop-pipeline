@@ -16,7 +16,7 @@ python -m venv .venv
 bun run dev
 ```
 
-打开 `http://localhost:5174`。
+打开 `http://localhost:7171`。
 
 ## 验证
 

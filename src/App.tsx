@@ -258,7 +258,15 @@ export function App() {
                   jobs={jobs}
                   poseProvider={poseProvider}
                   openOutputDirEnabled={serverConfig?.features.openOutputDir ?? false}
-                  onJobCreated={(job) => setJobs((current) => [job, ...current])}
+                  onJobCreated={(job) =>
+                    setJobs((current) => {
+                      const existing = current.find((item) => item.id === job.id);
+                      if (existing) {
+                        return current.map((item) => (item.id === job.id ? job : item));
+                      }
+                      return [job, ...current];
+                    })
+                  }
                   onJobUpdated={updateJob}
                   onJobsRefresh={loadJobs}
                   onOpenPreset={openEditor}

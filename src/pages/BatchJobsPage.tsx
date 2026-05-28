@@ -47,7 +47,7 @@ import type {
 
 const { Title, Text } = Typography;
 const JOB_ID_PLACEHOLDER = "<任务ID>";
-const LOOSE_IMAGE_FOLDER = "散图";
+const LOOSE_IMAGE_FOLDER = "根目录";
 const VISIBLE_INPUT_FOLDER_COUNT = 4;
 
 type UploadFileWithPath = File & { webkitRelativePath?: string };
@@ -101,6 +101,11 @@ type RunProgress = {
   events: Array<{ filename: string; folder: string; outputs: number; error?: string }>;
 };
 
+type TaskNamePreview = {
+  jobId: string;
+  names: string[];
+};
+
 const REVIEW_META: Record<ReviewStatus, { label: string; color: string }> = {
   pending_review: { label: "待复核", color: "gold" },
   approved: { label: "已通过", color: "green" },
@@ -137,6 +142,7 @@ export function BatchJobsPage({
   const [loadingJobId, setLoadingJobId] = useState("");
   const [isRefreshingJobs, setIsRefreshingJobs] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [taskNamePreview, setTaskNamePreview] = useState<TaskNamePreview | null>(null);
   const [correctedAngles, setCorrectedAngles] = useState<Record<string, Record<string, ViewAngle>>>({});
 
   const selectedScene = activeScenes.find((scene) => scene.id === sceneId) ?? activeScenes[0];
@@ -360,6 +366,21 @@ export function BatchJobsPage({
 
   const handleStreamEvent = (event: StreamEvent) => {
     if (event.type === "start") {
+      const scene = selectedScene;
+      onJobCreated({
+        id: event.jobId,
+        sceneId: scene?.id ?? sceneId,
+        sceneName: scene?.name ?? "批量任务",
+        poseProvider,
+        outputDir: event.outputDir,
+        imageCount: event.total,
+        outputCount: 0,
+        status: "running",
+        reviewStatus: "pending_review",
+        createdAt: new Date().toISOString().slice(0, 19),
+        images: []
+      });
+      setSelectedJobId(event.jobId);
       setProgress({
         jobId: event.jobId,
         total: event.total,
@@ -507,13 +528,38 @@ export function BatchJobsPage({
       title: "任务",
       dataIndex: "id",
       key: "id",
-      width: 200,
-      render: (_, job) => (
-        <Flex vertical>
-          <Text strong>{job.id}</Text>
-          <Text type="secondary">{job.createdAt}</Text>
-        </Flex>
-      )
+      width: 260,
+      render: (_, job) => {
+        const taskNames = getJobTaskNames(job, progress);
+        const taskName = taskNames[0] ?? job.id;
+        const taskNameLabel = `任务名称：${taskName}${taskNames.length > 1 ? ` 等 ${taskNames.length} 个文件` : ""}`;
+
+        return (
+          <Flex vertical gap={2} style={{ minWidth: 0 }}>
+            <Text strong>{job.id}</Text>
+            <Text type="secondary">{job.createdAt}</Text>
+            <Button
+              type="link"
+              size="small"
+              style={{
+                height: "auto",
+                justifyContent: "flex-start",
+                maxWidth: "100%",
+                padding: 0,
+                textAlign: "left"
+              }}
+              onClick={(event) => {
+                event.stopPropagation();
+                setTaskNamePreview({ jobId: job.id, names: taskNames });
+              }}
+            >
+              <Text type="secondary" ellipsis style={{ maxWidth: 220 }}>
+                {taskNameLabel}
+              </Text>
+            </Button>
+          </Flex>
+        );
+      }
     },
     { title: "场景", dataIndex: "sceneName", key: "sceneName" },
     {
@@ -521,6 +567,12 @@ export function BatchJobsPage({
       key: "count",
       width: 110,
       render: (_, job) => `${job.imageCount} / ${job.outputCount}`
+    },
+    {
+      title: "进度",
+      key: "progress",
+      width: 150,
+      render: (_, job) => <JobProgressSummary job={job} progress={progress} />
     },
     {
       title: "输出目录",
@@ -732,6 +784,31 @@ export function BatchJobsPage({
               { title: "预计输出", dataIndex: "count", key: "count", width: 100 }
             ]}
             dataSource={outputPreviewRows}
+          />
+        </Space>
+      </Modal>
+      <Modal
+        title="任务名称预览"
+        open={Boolean(taskNamePreview)}
+        footer={null}
+        width={720}
+        onCancel={() => setTaskNamePreview(null)}
+      >
+        <Space orientation="vertical" size={8} style={{ width: "100%" }}>
+          <Text type="secondary">{taskNamePreview?.jobId}</Text>
+          <Table
+            rowKey="key"
+            size="small"
+            pagination={{ pageSize: 8, hideOnSinglePage: true, size: "small" }}
+            columns={[
+              {
+                title: "任务名称",
+                dataIndex: "name",
+                key: "name",
+                render: (value: string) => <Text copyable ellipsis>{value}</Text>
+              }
+            ]}
+            dataSource={(taskNamePreview?.names ?? []).map((name, index) => ({ key: `${name}-${index}`, name }))}
           />
         </Space>
       </Modal>
@@ -1052,6 +1129,23 @@ function ProgressPanel({ progress }: { progress: RunProgress }) {
   );
 }
 
+function JobProgressSummary({ job, progress }: { job: BatchJob; progress: RunProgress | null }) {
+  const activeProgress = progress?.jobId === job.id ? progress : null;
+  const completed = activeProgress ? activeProgress.completed : job.images.length;
+  const total = activeProgress ? activeProgress.total : job.imageCount;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const status = job.status === "failed" ? "exception" : percent >= 100 ? "success" : "active";
+
+  return (
+    <Flex vertical gap={2}>
+      <Progress percent={percent} size="small" status={status} showInfo={false} />
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        {completed}/{total}
+      </Text>
+    </Flex>
+  );
+}
+
 type FolderProgressStatus = "queued" | "running" | "completed" | "failed";
 
 const FOLDER_STATUS_META: Record<FolderProgressStatus, { label: string; color: string }> = {
@@ -1226,6 +1320,14 @@ function normalizeUploadPath(value: string): string {
     .join("/") || "image";
 }
 
+function getJobTaskNames(job: BatchJob, progress: RunProgress | null): string[] {
+  if (progress?.jobId === job.id && progress.queue.length > 0) {
+    return progress.queue.map((item) => normalizeUploadPath(item.filename));
+  }
+  const names = job.images.map((image) => normalizeUploadPath(image.filename));
+  return names.length > 0 ? names : [job.id];
+}
+
 function getFolderFromPath(value: string): string {
   const parts = normalizeUploadPath(value).split("/");
   return parts.length > 1 ? parts.slice(0, -1).join("/") : LOOSE_IMAGE_FOLDER;
@@ -1248,14 +1350,14 @@ function buildOutputPreviewRows(
   const counts = new Map<string, number>();
   files.forEach((file) => {
     const parts = getFileRelativePath(file).split("/");
-    const folder = parts.length > 1 ? parts.slice(0, -1).join("/") : "散图";
+    const folder = parts.length > 1 ? parts.slice(0, -1).join("/") : LOOSE_IMAGE_FOLDER;
     counts.set(folder, (counts.get(folder) ?? 0) + 1);
   });
   return [...counts.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([folder, fileCount]) => {
       const base = joinDisplayPath(outputDir || "outputs", JOB_ID_PLACEHOLDER);
-      const groupPath = folder === "散图" ? base : joinDisplayPath(base, folder);
+      const groupPath = folder === LOOSE_IMAGE_FOLDER ? base : joinDisplayPath(base, folder);
       return {
         folder,
         path: groupPath,

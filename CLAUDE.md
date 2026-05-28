@@ -15,7 +15,7 @@ bun install
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r backend\requirements.txt pytest
 .\.venv\Scripts\python -m uvicorn backend.app.main:app --reload --port 8000
-bun run dev                       # frontend dev server on :5174
+bun run dev                       # frontend dev server on :7171
 ```
 
 Verify / build:
