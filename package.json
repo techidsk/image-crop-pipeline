@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun scripts/dev.mjs",
+    "stop:backend": "bun scripts/stop-backend.mjs",
     "dev:frontend": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1"

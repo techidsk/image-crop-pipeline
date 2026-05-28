@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from PIL import Image
 
+from typing import Any
+
 from .schemas import PoseKeypoint
 
 
@@ -95,30 +97,47 @@ def average_confidence(pose: Pose, names: list[str]) -> float:
     return sum(max(0.0, min(1.0, point.confidence)) for point in points) / len(points)
 
 
+FACE_NAMES = ["nose", "left_eye", "right_eye", "left_ear", "right_ear"]
+LEFT_BODY_NAMES = [
+    "left_shoulder",
+    "left_elbow",
+    "left_wrist",
+    "left_hip",
+    "left_knee",
+    "left_ankle",
+]
+RIGHT_BODY_NAMES = [
+    "right_shoulder",
+    "right_elbow",
+    "right_wrist",
+    "right_hip",
+    "right_knee",
+    "right_ankle",
+]
+VIEW_DIAGNOSTIC_KEYPOINTS = [
+    *FACE_NAMES,
+    "left_shoulder",
+    "right_shoulder",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
+]
+
+
 def classify_pose_view(pose: Pose, image: Image.Image | None = None) -> str:
-    face_names = ["nose", "left_eye", "right_eye", "left_ear", "right_ear"]
-    left_names = [
-        "left_shoulder",
-        "left_elbow",
-        "left_wrist",
-        "left_hip",
-        "left_knee",
-        "left_ankle",
-    ]
-    right_names = [
-        "right_shoulder",
-        "right_elbow",
-        "right_wrist",
-        "right_hip",
-        "right_knee",
-        "right_ankle",
-    ]
-    face_score = average_confidence(pose, face_names)
+    return str(pose_view_diagnostics(pose, image)["angle"])
+
+
+def pose_view_diagnostics(pose: Pose, image: Image.Image | None = None) -> dict[str, Any]:
+    face_score = average_confidence(pose, FACE_NAMES)
     visible_face_points = sum(
-        1 for name in face_names if (point := pose.point(name)) and point.confidence >= 0.2
+        1 for name in FACE_NAMES if (point := pose.point(name)) and point.confidence >= 0.2
     )
-    left_score = average_confidence(pose, left_names)
-    right_score = average_confidence(pose, right_names)
+    left_score = average_confidence(pose, LEFT_BODY_NAMES)
+    right_score = average_confidence(pose, RIGHT_BODY_NAMES)
     body_score = (left_score + right_score) / 2
 
     side_imbalance = abs(left_score - right_score) / max(left_score, right_score, 0.01)
@@ -135,18 +154,54 @@ def classify_pose_view(pose: Pose, image: Image.Image | None = None) -> str:
         )
         shoulder_ratio = shoulder_width / body_height
 
+    face_skin_ratio: float | None = None
+    angle = "front"
+    reason = "default_front_visible_face_balanced_body"
     if body_score >= 0.15 and (side_imbalance >= 0.38 or (shoulder_ratio is not None and shoulder_ratio < 0.45)):
-        return "side"
+        angle = "side"
+        reason = "body_side_imbalance_or_narrow_profile"
 
-    if body_score >= 0.15 and (face_score < 0.16 or visible_face_points <= 1):
-        return "back"
+    elif body_score >= 0.15 and (face_score < 0.16 or visible_face_points <= 1):
+        angle = "back"
+        reason = "missing_or_low_confidence_face"
 
-    if image is not None and body_score >= 0.15 and side_imbalance <= 0.32:
+    elif image is not None and body_score >= 0.15 and side_imbalance <= 0.32:
         face_skin_ratio = face_region_skin_ratio(image, pose)
         if face_skin_ratio is not None and face_skin_ratio < 0.16:
-            return "back"
+            angle = "back"
+            reason = "low_face_skin_ratio_in_face_region"
 
-    return "front"
+    return {
+        "angle": angle,
+        "reason": reason,
+        "scores": {
+            "face": round(face_score, 4),
+            "visible_face_points": visible_face_points,
+            "left_body": round(left_score, 4),
+            "right_body": round(right_score, 4),
+            "body": round(body_score, 4),
+            "side_imbalance": round(side_imbalance, 4),
+            "shoulder_ratio": round(shoulder_ratio, 4) if shoulder_ratio is not None else None,
+            "face_skin_ratio": round(face_skin_ratio, 4) if face_skin_ratio is not None else None,
+        },
+        "thresholds": {
+            "body_min": 0.15,
+            "side_imbalance_min": 0.38,
+            "side_shoulder_ratio_max": 0.45,
+            "back_face_score_max": 0.16,
+            "back_visible_face_points_max": 1,
+            "back_face_skin_ratio_max": 0.16,
+        },
+        "keypoints": {
+            name: {
+                "x": round(point.x, 2),
+                "y": round(point.y, 2),
+                "confidence": round(point.confidence, 4),
+            }
+            for name in VIEW_DIAGNOSTIC_KEYPOINTS
+            if (point := pose.point(name)) is not None
+        },
+    }
 
 
 def face_region_skin_ratio(image: Image.Image, pose: Pose) -> float | None:

@@ -418,6 +418,16 @@ def test_reconcile_view_classification_uses_pose_body_evidence_over_side_model_r
     assert result.provider == "pose_rule"
 
 
+def test_reconcile_view_classification_uses_high_confidence_paddle_direction():
+    result = reconcile_view_classification(
+        ViewClassification(angle="back", provider="paddle_person_attribute", confidence=0.978),
+        ViewClassification(angle="front", provider="pose_rule"),
+    )
+
+    assert result.angle == "back"
+    assert result.provider == "paddle_person_attribute"
+
+
 def test_densepose_part_counts_classifies_back_surface():
     result = parse_densepose_part_counts({2: 120, 7: 80, 1: 20})
 

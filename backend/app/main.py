@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -8,6 +9,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from io import BytesIO
+from logging.handlers import RotatingFileHandler
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -58,9 +60,10 @@ from .training_store import (
     save_training_samples,
     save_upload_image,
 )
-from .view_classifier import classify_view
+from .view_classifier import classify_view, classify_view_with_trace
 
 app = FastAPI(title="OpenPose Crop Pipeline")
+logger = logging.getLogger(__name__)
 POSE_DETECT_MAX_SIDE = int(os.getenv("POSE_DETECT_MAX_SIDE", "1280"))
 ANALYZE_BODY_KEYPOINTS = {
     "nose",
@@ -82,6 +85,34 @@ ANALYZE_BODY_KEYPOINTS = {
     "left_ankle",
     "right_ankle",
 }
+
+
+def configure_file_logging() -> None:
+    log_file = Path(
+        os.getenv(
+            "BACKEND_LOG_FILE",
+            Path(__file__).resolve().parents[1] / "data" / "logs" / "backend.log",
+        )
+    )
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    logger.setLevel(logging.INFO)
+    if any(
+        isinstance(handler, RotatingFileHandler)
+        and Path(handler.baseFilename) == log_file
+        for handler in logger.handlers
+    ):
+        return
+    handler = RotatingFileHandler(
+        log_file,
+        maxBytes=int(os.getenv("BACKEND_LOG_MAX_BYTES", "5242880")),
+        backupCount=int(os.getenv("BACKEND_LOG_BACKUP_COUNT", "3")),
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    logger.addHandler(handler)
+
+
+configure_file_logging()
 
 
 def _open_output_dir_enabled() -> bool:
@@ -678,7 +709,16 @@ async def analyze_upload(
 
     actual_provider = resolve_pose_provider_name(provider_name)
     pose = detect_pose(actual_provider, source_image)
-    view_classification = classify_view(source_image, pose)
+    view_classification, view_trace = classify_view_with_trace(source_image, pose)
+    logger.info(
+        "analyze_poses_view_trace filename=%s pose_provider=%s image_size=%sx%s result=%s trace=%s",
+        image.filename,
+        actual_provider,
+        source_image.width,
+        source_image.height,
+        view_classification.angle,
+        json.dumps(view_trace, ensure_ascii=False, sort_keys=True),
+    )
     return PoseAnalysis(
         filename=image.filename,
         source={"width": source_image.width, "height": source_image.height},

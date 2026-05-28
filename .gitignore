@@ -13,6 +13,7 @@ backend/data/training_samples/
 backend/data/app.db
 backend/data/app.db-*
 backend/data/batch_jobs.json
+backend/data/logs/
 backend/data/sync_state.json
 
 models/*.onnx

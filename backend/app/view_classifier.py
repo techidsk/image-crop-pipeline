@@ -8,7 +8,7 @@ from typing import Any
 
 from PIL import Image
 
-from .pose import Pose, classify_pose_view
+from .pose import Pose, pose_view_diagnostics
 from .schemas import PoseKeypoint, ViewAngle
 
 
@@ -16,6 +16,7 @@ VIEW_CLASSIFY_MAX_SIDE = int(os.getenv("VIEW_CLASSIFY_MAX_SIDE", "768"))
 PADDLE_PERSON_ATTRIBUTE_URL = "https://paddleclas.bj.bcebos.com/models/PULC/inference/person_attribute_infer.tar"
 DENSEPOSE_MIN_PIXELS = int(os.getenv("DENSEPOSE_MIN_PIXELS", "80"))
 DENSEPOSE_MIN_CONFIDENCE = float(os.getenv("DENSEPOSE_MIN_CONFIDENCE", "0.35"))
+PADDLE_DIRECTION_CONFIRM_CONFIDENCE = float(os.getenv("PADDLE_DIRECTION_CONFIRM_CONFIDENCE", "0.85"))
 
 
 def parse_densepose_parts_env(name: str, default: set[int]) -> set[int]:
@@ -152,7 +153,17 @@ class DensePoseViewClassifier:
 
 
 def classify_view(image: Image.Image, pose: Pose) -> ViewClassification:
-    pose_result = ViewClassification(angle=classify_pose_view(pose, image), provider="pose_rule")
+    return classify_view_with_trace(image, pose)[0]
+
+
+def classify_view_with_trace(image: Image.Image, pose: Pose) -> tuple[ViewClassification, dict[str, Any]]:
+    pose_diagnostics = pose_view_diagnostics(pose, image)
+    pose_result = ViewClassification(angle=pose_diagnostics["angle"], provider="pose_rule")
+    trace: dict[str, Any] = {
+        "pose_rule": pose_diagnostics,
+        "providers": [],
+        "final": classification_trace_entry(pose_result),
+    }
     providers = {
         value.strip()
         for value in os.getenv("VIEW_PROVIDER", "densepose,paddle").lower().replace(";", ",").split(",")
@@ -160,13 +171,62 @@ def classify_view(image: Image.Image, pose: Pose) -> ViewClassification:
     }
     if providers & {"densepose", "dense_pose"}:
         densepose_result = densepose_view_classifier.classify(image, pose)
+        trace["providers"].append(
+            {
+                "provider": "densepose",
+                "result": classification_trace_entry(densepose_result),
+            }
+        )
         if densepose_result is not None:
-            return reconcile_densepose_classification(densepose_result, pose_result)
+            result = reconcile_densepose_classification(densepose_result, pose_result)
+            trace["providers"][-1]["reconciled"] = classification_trace_entry(result)
+            trace["providers"][-1]["decision"] = reconcile_decision(result, densepose_result, pose_result)
+            trace["final"] = classification_trace_entry(result)
+            return result, trace
     if providers & {"paddle", "paddle_person_attribute"}:
         paddle_result = paddle_person_attribute_classifier.classify(image, pose)
+        trace["providers"].append(
+            {
+                "provider": "paddle_person_attribute",
+                "result": classification_trace_entry(paddle_result),
+            }
+        )
         if paddle_result is not None:
-            return reconcile_view_classification(paddle_result, pose_result)
-    return pose_result
+            result = reconcile_view_classification(paddle_result, pose_result)
+            trace["providers"][-1]["reconciled"] = classification_trace_entry(result)
+            trace["providers"][-1]["decision"] = reconcile_decision(result, paddle_result, pose_result)
+            trace["final"] = classification_trace_entry(result)
+            return result, trace
+    return pose_result, trace
+
+
+def classification_trace_entry(result: ViewClassification | None) -> dict[str, Any] | None:
+    if result is None:
+        return None
+    return {
+        "angle": result.angle,
+        "provider": result.provider,
+        "confidence": round(result.confidence, 4) if result.confidence is not None else None,
+    }
+
+
+def reconcile_decision(
+    final_result: ViewClassification,
+    model_result: ViewClassification,
+    pose_result: ViewClassification,
+) -> str:
+    if (
+        model_result.provider == "paddle_person_attribute"
+        and model_result.confidence is not None
+        and model_result.confidence >= PADDLE_DIRECTION_CONFIRM_CONFIDENCE
+        and final_result.provider == model_result.provider
+    ):
+        return "high_confidence_paddle_result_used"
+    if final_result.provider == model_result.provider:
+        return "model_result_used"
+    if final_result.provider == pose_result.provider:
+        return "pose_rule_kept"
+    return "other"
 
 
 def reconcile_densepose_classification(
@@ -184,6 +244,12 @@ def reconcile_view_classification(
     model_result: ViewClassification,
     pose_result: ViewClassification,
 ) -> ViewClassification:
+    if (
+        model_result.provider == "paddle_person_attribute"
+        and model_result.confidence is not None
+        and model_result.confidence >= PADDLE_DIRECTION_CONFIRM_CONFIDENCE
+    ):
+        return model_result
     if pose_result.angle == "side" and model_result.angle != "side":
         return pose_result
     if model_result.angle == "side" and pose_result.angle != "side":
