@@ -1,4 +1,4 @@
-export type AppView = "batch" | "viewTest" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
+export type AppView = "batch" | "viewTest" | "modelHealth" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
 export type PoseProviderId = "rtmw" | "heuristic";
 export type ViewAngle = "front" | "side" | "back";
 export type ViewProviderId = "densepose" | "paddle_person_attribute" | "pose_rule" | "manual_override" | string;
@@ -147,4 +147,46 @@ export type BatchJob = {
   reviewStatus: ReviewStatus;
   createdAt: string;
   images: BatchJobImage[];
+};
+
+export type ModelHealthStatus = {
+  pose: {
+    requestedDefault: string;
+    activeDefault: string;
+    availableProviders: string[];
+    rtmw: {
+      loaded: boolean;
+      configuredPath: string;
+      modelExists: boolean;
+      modelSize: number;
+      inputWidth: number;
+      inputHeight: number;
+      autoDownload: string;
+      downloadRequired: string;
+    };
+  };
+  view: {
+    providerOrder: string[];
+    paddle: {
+      enabled: boolean;
+      dependencyAvailable: boolean;
+      modelDir: string;
+      modelExists: boolean;
+      paramsExists: boolean;
+      ready: boolean;
+      confirmConfidence: number;
+    };
+    densepose: {
+      enabled: boolean;
+      config: { path: string; exists: boolean; size: number };
+      weights: { path: string; exists: boolean; size: number };
+      denseposeAvailable: boolean;
+      detectron2Available: boolean;
+      ready: boolean;
+    };
+  };
+  diagnostics: {
+    logFile: string;
+    analyzeTraceMarker: string;
+  };
 };

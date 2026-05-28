@@ -77,7 +77,10 @@ export function Sidebar({
         key: "diagnostics",
         type: "group",
         label: "诊断工具",
-        children: [{ key: "viewTest", icon: <EyeOutlined />, label: "视角测试" }]
+        children: [
+          { key: "viewTest", icon: <EyeOutlined />, label: "视角测试" },
+          { key: "modelHealth", icon: <ExperimentOutlined />, label: "模型健康" }
+        ]
       }
     ],
     []

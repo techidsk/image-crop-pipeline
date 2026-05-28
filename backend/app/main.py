@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import importlib.util
 import json
 import logging
 import os
@@ -151,6 +152,92 @@ app.add_middleware(
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def dependency_available(module_name: str) -> bool:
+    return importlib.util.find_spec(module_name) is not None
+
+
+def path_status(value: str | None) -> dict[str, object]:
+    if not value:
+        return {"path": "", "exists": False, "size": 0}
+    path = Path(value).expanduser()
+    exists = path.exists()
+    return {
+        "path": str(path),
+        "exists": exists,
+        "size": path.stat().st_size if exists and path.is_file() else 0,
+    }
+
+
+@app.get("/api/model-health")
+def model_health() -> dict[str, object]:
+    rtmw_path = Path(os.getenv("RTMW_ONNX_PATH", "models/rtmw-l-384x288.onnx")).expanduser()
+    paddle_dir = Path(
+        os.getenv(
+            "PADDLE_PERSON_ATTRIBUTE_DIR",
+            Path.home() / ".paddleclas" / "inference_model" / "PULC" / "person_attribute",
+        )
+    ).expanduser()
+    paddle_model = paddle_dir / "inference.pdmodel"
+    paddle_params = paddle_dir / "inference.pdiparams"
+    view_providers = [
+        value.strip()
+        for value in os.getenv("VIEW_PROVIDER", "densepose,paddle").lower().replace(";", ",").split(",")
+        if value.strip()
+    ]
+    densepose_config = os.getenv("DENSEPOSE_CONFIG", "")
+    densepose_weights = os.getenv("DENSEPOSE_WEIGHTS", "")
+
+    return {
+        "pose": {
+            "requestedDefault": os.getenv("POSE_PROVIDER", "rtmw").lower(),
+            "activeDefault": "rtmw" if "rtmw" in pose_providers else "heuristic",
+            "availableProviders": sorted(pose_providers.keys()),
+            "rtmw": {
+                "loaded": "rtmw" in pose_providers,
+                "configuredPath": str(rtmw_path),
+                "modelExists": rtmw_path.exists(),
+                "modelSize": rtmw_path.stat().st_size if rtmw_path.exists() and rtmw_path.is_file() else 0,
+                "inputWidth": int(os.getenv("RTMW_INPUT_WIDTH", "288")),
+                "inputHeight": int(os.getenv("RTMW_INPUT_HEIGHT", "384")),
+                "autoDownload": os.getenv("MODEL_AUTO_DOWNLOAD", "false"),
+                "downloadRequired": os.getenv("MODEL_DOWNLOAD_REQUIRED", "false"),
+            },
+        },
+        "view": {
+            "providerOrder": view_providers,
+            "paddle": {
+                "enabled": bool({"paddle", "paddle_person_attribute"} & set(view_providers)),
+                "dependencyAvailable": dependency_available("paddle"),
+                "modelDir": str(paddle_dir),
+                "modelExists": paddle_model.exists(),
+                "paramsExists": paddle_params.exists(),
+                "ready": dependency_available("paddle") and paddle_model.exists() and paddle_params.exists(),
+                "confirmConfidence": float(os.getenv("PADDLE_DIRECTION_CONFIRM_CONFIDENCE", "0.85")),
+            },
+            "densepose": {
+                "enabled": bool({"densepose", "dense_pose"} & set(view_providers)),
+                "config": path_status(densepose_config),
+                "weights": path_status(densepose_weights),
+                "denseposeAvailable": dependency_available("densepose"),
+                "detectron2Available": dependency_available("detectron2"),
+                "ready": bool(densepose_config)
+                and bool(densepose_weights)
+                and Path(densepose_config).expanduser().exists()
+                and Path(densepose_weights).expanduser().exists()
+                and dependency_available("densepose")
+                and dependency_available("detectron2"),
+            },
+        },
+        "diagnostics": {
+            "logFile": os.getenv(
+                "BACKEND_LOG_FILE",
+                str(Path(__file__).resolve().parents[1] / "data" / "logs" / "backend.log"),
+            ),
+            "analyzeTraceMarker": "analyze_poses_view_trace",
+        },
+    }
 
 
 @app.get("/api/server-config")
