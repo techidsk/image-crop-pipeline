@@ -7,8 +7,8 @@ WORKDIR /app
 
 RUN python -m pip install --no-cache-dir --upgrade pip
 
-COPY backend/requirements.txt backend/requirements-onnx.txt /app/backend/
-RUN python -m pip install --no-cache-dir -r /app/backend/requirements-onnx.txt
+COPY backend/requirements.txt backend/requirements-onnx.txt backend/requirements-paddle.txt /app/backend/
+RUN python -m pip install --no-cache-dir -r /app/backend/requirements-onnx.txt -r /app/backend/requirements-paddle.txt
 
 COPY backend /app/backend
 

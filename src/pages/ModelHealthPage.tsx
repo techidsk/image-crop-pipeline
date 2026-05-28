@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, WarningOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Descriptions, Empty, Flex, Space, Spin, Tag, Typography } from "antd";
-import { fetchModelHealth } from "../api/presets";
-import type { ModelHealthStatus } from "../types";
+import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, ToolOutlined, WarningOutlined } from "@ant-design/icons";
+import { Alert, App, Button, Card, Descriptions, Empty, Flex, List, Space, Spin, Tag, Typography } from "antd";
+import { fetchModelHealth, repairModelHealth } from "../api/presets";
+import type { ModelHealthStatus, ModelRepairAction } from "../types";
 
 const { Title, Text } = Typography;
 
@@ -10,6 +10,8 @@ export function ModelHealthPage() {
   const { message } = App.useApp();
   const [status, setStatus] = useState<ModelHealthStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const [repairActions, setRepairActions] = useState<ModelRepairAction[]>([]);
   const [error, setError] = useState("");
 
   const loadStatus = async () => {
@@ -30,6 +32,28 @@ export function ModelHealthPage() {
     void loadStatus();
   }, []);
 
+  const repairStatus = async () => {
+    setRepairing(true);
+    setError("");
+    try {
+      const result = await repairModelHealth();
+      setRepairActions(result.actions);
+      setStatus(result.health);
+      const needsManual = result.actions.some((action) => action.status === "manual_required" || action.status === "failed");
+      if (needsManual) {
+        void message.warning("部分项目需要手动处理");
+      } else {
+        void message.success("模型修复完成");
+      }
+    } catch (err) {
+      const nextError = err instanceof Error ? err.message : "模型修复失败";
+      setError(nextError);
+      void message.error(nextError);
+    } finally {
+      setRepairing(false);
+    }
+  };
+
   if (loading && !status) {
     return (
       <Flex align="center" justify="center" style={{ minHeight: 420 }}>
@@ -45,12 +69,34 @@ export function ModelHealthPage() {
           <Title level={3} style={{ margin: 0 }}>模型健康检查</Title>
           <Text type="secondary">确认当前后端进程实际加载的姿态模型和视角模型</Text>
         </Space>
-        <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void loadStatus()} disabled={loading}>
-          刷新
-        </Button>
+        <Space>
+          <Button icon={<ToolOutlined />} type="primary" onClick={() => void repairStatus()} loading={repairing}>
+            修复
+          </Button>
+          <Button icon={<ReloadOutlined spin={loading} />} onClick={() => void loadStatus()} disabled={loading || repairing}>
+            刷新
+          </Button>
+        </Space>
       </Flex>
 
       {error && <Alert type="error" showIcon message={error} />}
+      {repairActions.length > 0 && (
+        <Card size="small" title="修复结果">
+          <List
+            size="small"
+            dataSource={repairActions}
+            renderItem={(action) => (
+              <List.Item>
+                <Space>
+                  <RepairTag status={action.status} />
+                  <Text strong>{repairTargetLabel(action.target)}</Text>
+                  <Text type={action.status === "failed" ? "danger" : "secondary"}>{action.message}</Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
 
       {status ? (
         <>
@@ -174,6 +220,21 @@ function StatusSummaryCard({
 
 function HealthTag({ ok, label }: { ok: boolean; label: string }) {
   return <Tag color={ok ? "green" : "red"}>{label}</Tag>;
+}
+
+function RepairTag({ status }: { status: string }) {
+  if (status === "ok") return <Tag color="green">正常</Tag>;
+  if (status === "fixed") return <Tag color="blue">已修复</Tag>;
+  if (status === "manual_required") return <Tag color="gold">需手动</Tag>;
+  if (status === "failed") return <Tag color="red">失败</Tag>;
+  return <Tag>{status}</Tag>;
+}
+
+function repairTargetLabel(target: string) {
+  if (target === "rtmw") return "RTMW";
+  if (target === "paddle_model") return "Paddle 模型";
+  if (target === "paddle_dependency") return "Paddle 依赖";
+  return target;
 }
 
 function yesNo(value: boolean) {

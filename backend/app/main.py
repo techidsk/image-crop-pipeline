@@ -22,7 +22,7 @@ from starlette.background import BackgroundTask
 
 from .cropping import make_crop
 from .image_utils import open_image_as_srgb
-from .model_manager import ensure_model_available
+from .model_manager import DEFAULT_RTMW_MODEL_URL, download_model, ensure_model_available
 from .pose import Pose, make_pose_provider
 from .batch_store import (
     append_batch_job,
@@ -61,7 +61,7 @@ from .training_store import (
     save_training_samples,
     save_upload_image,
 )
-from .view_classifier import classify_view, classify_view_with_trace
+from .view_classifier import classify_view, classify_view_with_trace, ensure_person_attribute_model
 
 app = FastAPI(title="OpenPose Crop Pipeline")
 logger = logging.getLogger(__name__)
@@ -238,6 +238,49 @@ def model_health() -> dict[str, object]:
             "analyzeTraceMarker": "analyze_poses_view_trace",
         },
     }
+
+
+@app.post("/api/model-health/repair")
+def repair_model_health() -> dict[str, object]:
+    actions: list[dict[str, object]] = []
+
+    rtmw_path = Path(os.getenv("RTMW_ONNX_PATH", "models/rtmw-l-384x288.onnx")).expanduser()
+    if not rtmw_path.exists() or rtmw_path.stat().st_size <= 0:
+        try:
+            download_model(
+                os.getenv("RTMW_MODEL_URL", DEFAULT_RTMW_MODEL_URL),
+                rtmw_path,
+                os.getenv("RTMW_MODEL_SHA256", "").strip().lower() or None,
+            )
+            actions.append({"target": "rtmw", "status": "fixed", "message": "RTMW ONNX 模型已下载"})
+        except Exception as exc:
+            actions.append({"target": "rtmw", "status": "failed", "message": str(exc)})
+    else:
+        actions.append({"target": "rtmw", "status": "ok", "message": "RTMW ONNX 模型文件已存在"})
+
+    try:
+        paddle_dir = ensure_person_attribute_model()
+        paddle_model = paddle_dir / "inference.pdmodel"
+        paddle_params = paddle_dir / "inference.pdiparams"
+        if paddle_model.exists() and paddle_params.exists():
+            actions.append({"target": "paddle_model", "status": "fixed", "message": "Paddle 视角模型文件已就绪"})
+        else:
+            actions.append({"target": "paddle_model", "status": "failed", "message": "Paddle 模型下载后仍缺少文件"})
+    except Exception as exc:
+        actions.append({"target": "paddle_model", "status": "failed", "message": str(exc)})
+
+    if dependency_available("paddle"):
+        actions.append({"target": "paddle_dependency", "status": "ok", "message": "paddlepaddle 依赖已安装"})
+    else:
+        actions.append(
+            {
+                "target": "paddle_dependency",
+                "status": "manual_required",
+                "message": "缺少 paddlepaddle 依赖。Docker 部署请用最新 Dockerfile 完整重建镜像；本机部署请安装 backend/requirements-paddle.txt。",
+            }
+        )
+
+    return {"actions": actions, "health": model_health()}
 
 
 @app.get("/api/server-config")

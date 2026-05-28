@@ -17,8 +17,10 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 更新后端容器代码
+      - name: 更新后端容器依赖和代码
         run: |
+          docker cp backend/requirements-paddle.txt image-crop-backend:/app/backend/requirements-paddle.txt
+          docker exec image-crop-backend python -m pip install --no-cache-dir -r /app/backend/requirements-paddle.txt
           docker cp backend/app/. image-crop-backend:/app/backend/app/
           docker restart image-crop-backend
 

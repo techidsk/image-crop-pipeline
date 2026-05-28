@@ -68,7 +68,9 @@ if [ "$Mode" = "full" ]; then
   log "远端 3/7 完整重建 Docker Compose 服务"
   docker compose up -d --build
 else
-  log "远端 3/7 更新后端容器代码"
+  log "远端 3/7 更新后端容器依赖和代码"
+  docker cp backend/requirements-paddle.txt image-crop-backend:/app/backend/requirements-paddle.txt
+  docker exec image-crop-backend python -m pip install --no-cache-dir -r /app/backend/requirements-paddle.txt
   docker cp backend/app/. image-crop-backend:/app/backend/app/
   docker restart image-crop-backend
 

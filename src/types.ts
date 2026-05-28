@@ -190,3 +190,14 @@ export type ModelHealthStatus = {
     analyzeTraceMarker: string;
   };
 };
+
+export type ModelRepairAction = {
+  target: string;
+  status: "ok" | "fixed" | "failed" | "manual_required" | string;
+  message: string;
+};
+
+export type ModelRepairResponse = {
+  actions: ModelRepairAction[];
+  health: ModelHealthStatus;
+};

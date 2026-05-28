@@ -1,4 +1,4 @@
-import type { BatchJob, CropPreset, CropScene, ModelHealthStatus, ProcessResponse } from "../types";
+import type { BatchJob, CropPreset, CropScene, ModelHealthStatus, ModelRepairResponse, ProcessResponse } from "../types";
 
 export async function fetchPresets() {
   const response = await fetch("/api/presets");
@@ -64,6 +64,15 @@ export async function fetchModelHealth() {
   const response = await fetch("/api/model-health");
   if (!response.ok) throw new Error("模型健康状态加载失败");
   return (await response.json()) as ModelHealthStatus;
+}
+
+export async function repairModelHealth() {
+  const response = await fetch("/api/model-health/repair", { method: "POST" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail ?? "模型修复失败");
+  }
+  return (await response.json()) as ModelRepairResponse;
 }
 
 export type StorageCollectionStatus = {
