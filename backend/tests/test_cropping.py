@@ -9,7 +9,7 @@ from backend.app.cropping import make_crop, person_bounds
 from backend.app.image_utils import SRGB_PROFILE_BYTES, open_image_as_srgb
 from backend.app.main import detect_pose, presets_for_view, response_keypoints
 from backend.app.pose import HeuristicPoseProvider, Pose, classify_pose_view
-from backend.app.schemas import CropPreset, PoseKeypoint
+from backend.app.schemas import CropPreset, ExportSettings, PoseKeypoint
 from backend.app.view_classifier import (
     ViewClassification,
     densepose_part_counts,
@@ -108,6 +108,26 @@ def test_make_crop_uses_anchor_and_target_size():
     assert result.box.left == 100
     assert result.box.right == 1900
     assert result.image
+
+
+def test_make_crop_can_export_jpeg():
+    image = Image.new("RGBA", (100, 100), (64, 128, 192, 128))
+    pose = Pose(keypoints=[PoseKeypoint(name="neck", x=50, y=50, confidence=0.9)])
+    preset = CropPreset(
+        id="jpeg",
+        name="JPEG",
+        width=50,
+        height=50,
+        anchor="neck",
+    )
+
+    result = make_crop(image, pose, preset, ExportSettings(format="jpeg", quality=90))
+    output = Image.open(BytesIO(base64.b64decode(result.image)))
+
+    assert result.mimeType == "image/jpeg"
+    assert result.extension == "jpg"
+    assert output.format == "JPEG"
+    assert output.mode == "RGB"
 
 
 def test_make_crop_uses_learned_composition():

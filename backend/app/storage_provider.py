@@ -16,7 +16,7 @@ from .sync_state import content_hash, get_entry_status, record_sync_result
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 # 纳入云端同步状态跟踪的集合
-TRACKED_KEYS = ("presets.json", "scenes.json")
+TRACKED_KEYS = ("presets.json", "scenes.json", "export_settings.json")
 
 
 class StorageProvider(ABC):
@@ -198,7 +198,12 @@ def get_storage_status() -> dict:
         "cloudSync": True,
         "bucket": getattr(provider.bucket, "bucket_name", None),
         "collections": {
-            name: get_entry_status(f"{name}.json") for name in ("presets", "scenes")
+            name: get_entry_status(key)
+            for name, key in (
+                ("presets", "presets.json"),
+                ("scenes", "scenes.json"),
+                ("exportSettings", "export_settings.json"),
+            )
         },
     }
 

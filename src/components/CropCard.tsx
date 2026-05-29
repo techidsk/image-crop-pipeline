@@ -12,14 +12,16 @@ type CropCardProps = {
 
 export function CropCard({ filename, crop, onOpenPreset }: CropCardProps) {
   const safeName = filename.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "_");
-  const src = crop.imageUrl || (crop.image ? `data:image/png;base64,${crop.image}` : "");
+  const mimeType = crop.mimeType ?? "image/png";
+  const extension = crop.extension ?? (mimeType === "image/jpeg" ? "jpg" : "png");
+  const src = crop.imageUrl || (crop.image ? `data:${mimeType};base64,${crop.image}` : "");
   return (
     <Card
       size="small"
       styles={{ body: { padding: 8 } }}
       cover={<Image src={src} alt={crop.name} preview={{ src }} style={{ objectFit: "cover" }} />}
       actions={[
-        <a key="download" href={src} download={`${safeName}_${crop.presetId}.png`} aria-label={`下载 ${crop.name}`}>
+        <a key="download" href={src} download={`${safeName}_${crop.presetId}.${extension}`} aria-label={`下载 ${crop.name}`}>
           <DownloadOutlined /> 下载
         </a>
       ]}

@@ -414,7 +414,7 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
                     {compareCrop ? (
                       <>
                         <Image
-                          src={`data:image/png;base64,${compareCrop.image}`}
+                          src={`data:${compareCrop.mimeType ?? "image/png"};base64,${compareCrop.image}`}
                           alt={provider}
                           style={{ objectFit: "contain", maxHeight: 220 }}
                         />
@@ -435,7 +435,7 @@ function PresetTestPanel({ preset, poseProvider }: { preset: CropPreset; posePro
         <Card size="small" title={crop.name}>
           <Flex vertical gap={8}>
             <Image
-              src={`data:image/png;base64,${crop.image}`}
+              src={`data:${crop.mimeType ?? "image/png"};base64,${crop.image}`}
               alt={crop.name}
               style={{ objectFit: "contain", maxHeight: 360 }}
             />

@@ -1,4 +1,4 @@
-export type AppView = "batch" | "viewTest" | "modelHealth" | "presetList" | "presetEditor" | "sceneList" | "batchJobs";
+export type AppView = "batch" | "viewTest" | "modelHealth" | "presetList" | "presetEditor" | "sceneList" | "batchJobs" | "settings";
 export type PoseProviderId = "rtmw" | "heuristic";
 export type ViewAngle = "front" | "side" | "back";
 export type ViewProviderId = "densepose" | "paddle_person_attribute" | "pose_rule" | "manual_override" | string;
@@ -54,8 +54,15 @@ export type CropResult = {
   height: number;
   box: { left: number; top: number; right: number; bottom: number };
   image: string;
+  mimeType?: string;
+  extension?: string;
   outputPath?: string | null;
   imageUrl?: string | null;
+};
+
+export type ExportSettings = {
+  format: "png" | "jpeg";
+  quality: number;
 };
 
 export type ProcessResponse = {

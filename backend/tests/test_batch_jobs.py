@@ -9,7 +9,7 @@ from PIL import Image
 
 from backend.app.main import app
 from backend.app import batch_store, main
-from backend.app.schemas import BatchJob, BatchJobImage, CropPreset, CropScene
+from backend.app.schemas import BatchJob, BatchJobImage, CropPreset, CropScene, ExportSettings
 
 
 @pytest.fixture()
@@ -184,6 +184,37 @@ def test_get_batch_job_detail_reconstructs_output_previews(isolated_batch_store,
     assert body["images"][0]["crops"][0]["imageUrl"] == "/api/batch-jobs/job-1/files/服装A/正面/001_front-only.png"
 
 
+def test_get_batch_job_detail_reconstructs_jpeg_output_previews(isolated_batch_store, tmp_path, monkeypatch):
+    output_dir = tmp_path / "outputs" / "job-1"
+    crop_dir = output_dir / "服装A" / "正面"
+    originals_dir = output_dir / "_originals" / "服装A" / "正面"
+    crop_dir.mkdir(parents=True)
+    originals_dir.mkdir(parents=True)
+    Image.new("RGB", (80, 90), "white").save(crop_dir / "001_front-only.jpg", format="JPEG")
+    Image.new("RGB", (1000, 1200), "white").save(originals_dir / "001.jpg")
+    batch_store.append_batch_job(
+        make_job().model_copy(
+            update={
+                "outputDir": str(output_dir),
+                "images": [BatchJobImage(filename="服装A/正面/001.jpg", outputs=1)],
+            }
+        )
+    )
+    monkeypatch.setattr(
+        main,
+        "load_presets",
+        lambda: [CropPreset(id="front-only", name="Front", width=80, height=90, anchor="neck", viewAngles=["front"])],
+    )
+
+    response = TestClient(app).get("/api/batch-jobs/job-1")
+
+    assert response.status_code == 200
+    crop = response.json()["images"][0]["crops"][0]
+    assert crop["mimeType"] == "image/jpeg"
+    assert crop["extension"] == "jpg"
+    assert crop["imageUrl"] == "/api/batch-jobs/job-1/files/服装A/正面/001_front-only.jpg"
+
+
 def test_regenerate_batch_job_image_with_manual_view_uses_archived_original(isolated_batch_store, tmp_path, monkeypatch):
     output_dir = tmp_path / "outputs" / "job-1"
     originals_dir = output_dir / "_originals" / "服装A" / "正面"
@@ -218,6 +249,7 @@ def test_regenerate_batch_job_image_with_manual_view_uses_archived_original(isol
             CropPreset(id="back-only", name="Back", width=100, height=100, anchor="neck", viewAngles=["back"]),
         ],
     )
+    monkeypatch.setattr(main, "load_export_settings", lambda: ExportSettings(format="jpeg", quality=85))
 
     response = TestClient(app).post(
         "/api/batch-jobs/job-1/images/服装A/正面/001.jpg/regenerate-view",
@@ -232,4 +264,4 @@ def test_regenerate_batch_job_image_with_manual_view_uses_archived_original(isol
     assert body["images"][0]["viewAngle"] == "back"
     assert [crop["presetId"] for crop in body["images"][0]["crops"]] == ["back-only"]
     assert not old_output.exists()
-    assert (output_dir / "服装A" / "正面" / "001_back-only.png").exists()
+    assert (output_dir / "服装A" / "正面" / "001_back-only.jpg").exists()

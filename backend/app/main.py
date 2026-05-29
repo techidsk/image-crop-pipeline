@@ -34,6 +34,7 @@ from .batch_store import (
 )
 from .preset_store import load_presets, save_presets
 from .scene_store import load_scenes, save_scenes
+from .settings_store import load_export_settings, save_export_settings
 from .storage_provider import get_storage_status, sync_now
 from .schemas import (
     BatchJob,
@@ -43,6 +44,7 @@ from .schemas import (
     CropResult,
     CropPreset,
     CropScene,
+    ExportSettings,
     PoseAnalysis,
     PoseAnalysisBatchResponse,
     ProcessResponse,
@@ -387,8 +389,9 @@ def output_source_stem(relative_path: str) -> str:
     return safe_path_part(PurePosixPath(name).stem or "image", "image")
 
 
-def output_crop_filename(relative_path: str, preset_id: str) -> str:
-    return f"{output_source_stem(relative_path)}_{safe_filename(preset_id)}.png"
+def output_crop_filename(relative_path: str, preset_id: str, extension: str = "png") -> str:
+    safe_extension = extension.lstrip(".") or "png"
+    return f"{output_source_stem(relative_path)}_{safe_filename(preset_id)}.{safe_extension}"
 
 
 def resolve_output_layout(value: str | None) -> str:
@@ -500,6 +503,16 @@ def get_scenes() -> list[CropScene]:
 @app.put("/api/scenes", response_model=list[CropScene])
 def put_scenes(scenes: list[CropScene]) -> list[CropScene]:
     return save_scenes(scenes)
+
+
+@app.get("/api/export-settings", response_model=ExportSettings)
+def get_export_settings() -> ExportSettings:
+    return load_export_settings()
+
+
+@app.put("/api/export-settings", response_model=ExportSettings)
+def put_export_settings(settings: ExportSettings) -> ExportSettings:
+    return save_export_settings(settings)
 
 
 @app.get("/api/storage/status")
@@ -657,8 +670,9 @@ async def process_upload(
     view_classification = classify_view(source_image, pose)
     view_angle = view_angle_override or view_classification.angle
     matched_presets = presets_for_view(crop_presets, view_angle)
+    export_settings = load_export_settings()
     try:
-        crops = [make_crop(source_image, pose, preset) for preset in matched_presets]
+        crops = [make_crop(source_image, pose, preset, export_settings) for preset in matched_presets]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -691,7 +705,7 @@ async def process_upload_to_output_dir(
     for crop in response.crops:
         crop_dir = output_dir.joinpath(*source_dirs)
         crop_dir.mkdir(parents=True, exist_ok=True)
-        filename = output_crop_filename(relative_source_path, crop.presetId)
+        filename = output_crop_filename(relative_source_path, crop.presetId, crop.extension)
         output_path = crop_dir / filename
         output_path.write_bytes(base64.b64decode(crop.image))
         relative_output_path = output_path.relative_to(output_dir).as_posix()
@@ -729,11 +743,11 @@ def remove_existing_outputs_for_source(job_dir: Path, source_path: str) -> None:
     source_stem = output_source_stem(source_path)
     if not search_root.exists() or not search_root.is_dir():
         return
-    for path in search_root.glob(f"{source_stem}_*.png"):
+    for path in search_root.glob(f"{source_stem}_*.*"):
         try:
             if ORIGINALS_DIRNAME in path.relative_to(job_dir).parts:
                 continue
-            if path.is_file():
+            if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg"}:
                 path.unlink()
         except (OSError, ValueError):
             continue
@@ -808,18 +822,19 @@ def load_batch_job_image_crops(
         return []
 
     crops: list[CropResult] = []
-    for path in sorted(search_root.glob(f"{source_stem}_*.png")):
+    for path in sorted(search_root.glob(f"{source_stem}_*.*")):
         try:
             relative = path.relative_to(job_dir)
         except ValueError:
             continue
-        if ORIGINALS_DIRNAME in relative.parts or not path.is_file():
+        if ORIGINALS_DIRNAME in relative.parts or not path.is_file() or path.suffix.lower() not in {".png", ".jpg", ".jpeg"}:
             continue
         safe_preset_id = infer_safe_preset_id(path, source_stem)
         preset = presets_by_safe_id.get(safe_preset_id)
         try:
             with Image.open(path) as crop_image:
                 width, height = crop_image.size
+                mime_type = Image.MIME.get(crop_image.format, "image/png")
         except OSError:
             continue
         crops.append(
@@ -830,6 +845,8 @@ def load_batch_job_image_crops(
                 height=height,
                 box={"left": 0, "top": 0, "right": width, "bottom": height},
                 image="",
+                mimeType=mime_type,
+                extension="jpg" if path.suffix.lower() in {".jpg", ".jpeg"} else "png",
                 outputPath=str(path),
                 imageUrl=f"/api/batch-jobs/{job.id}/files/{relative.as_posix()}",
             )

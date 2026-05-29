@@ -1,4 +1,12 @@
-import type { BatchJob, CropPreset, CropScene, ModelHealthStatus, ModelRepairResponse, ProcessResponse } from "../types";
+import type {
+  BatchJob,
+  CropPreset,
+  CropScene,
+  ExportSettings,
+  ModelHealthStatus,
+  ModelRepairResponse,
+  ProcessResponse
+} from "../types";
 
 export async function fetchPresets() {
   const response = await fetch("/api/presets");
@@ -36,6 +44,25 @@ export async function persistScenes(scenes: CropScene[]) {
     throw new Error(body.detail ?? "场景保存失败");
   }
   return (await response.json()) as CropScene[];
+}
+
+export async function fetchExportSettings() {
+  const response = await fetch("/api/export-settings");
+  if (!response.ok) throw new Error("导出设置加载失败");
+  return (await response.json()) as ExportSettings;
+}
+
+export async function persistExportSettings(settings: ExportSettings) {
+  const response = await fetch("/api/export-settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings)
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail ?? "导出设置保存失败");
+  }
+  return (await response.json()) as ExportSettings;
 }
 
 export async function fetchBatchJobs() {

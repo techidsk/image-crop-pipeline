@@ -26,7 +26,7 @@ export function ResultOverview({ result, onOpenPreset }: ResultOverviewProps) {
           {result.crops.map((crop) => (
             <Flex key={crop.presetId} vertical gap={4} style={{ width: 120 }}>
               <Image
-                src={`data:image/png;base64,${crop.image}`}
+                src={`data:${crop.mimeType ?? "image/png"};base64,${crop.image}`}
                 alt={crop.name}
                 width={120}
                 style={{ objectFit: "cover", borderRadius: 6 }}

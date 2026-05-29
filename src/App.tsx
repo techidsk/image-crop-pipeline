@@ -21,6 +21,7 @@ import { ModelHealthPage } from "./pages/ModelHealthPage";
 import { PresetEditorPage } from "./pages/PresetEditorPage";
 import { PresetListPage } from "./pages/PresetListPage";
 import { SceneListPage } from "./pages/SceneListPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { ViewTestPage } from "./pages/ViewTestPage";
 import type { AppView, BatchJob, CropPreset, CropScene, PoseProviderId } from "./types";
 
@@ -32,6 +33,7 @@ const pathForRoute = (view: AppView, presetId?: string) => {
   if (view === "sceneList") return "/scenes";
   if (view === "viewTest") return "/view-test";
   if (view === "modelHealth") return "/model-health";
+  if (view === "settings") return "/settings";
   if (view === "presetEditor" && presetId) return `/presets/${encodeURIComponent(presetId)}`;
   return "/presets";
 };
@@ -42,6 +44,7 @@ const viewForPath = (pathname: string): AppView => {
   if (parts[0] === "scenes") return "sceneList";
   if (parts[0] === "view-test") return "viewTest";
   if (parts[0] === "model-health") return "modelHealth";
+  if (parts[0] === "settings") return "settings";
   if (parts[0] === "presets") return parts[1] ? "presetEditor" : "presetList";
   return "batch";
 };
@@ -278,6 +281,7 @@ export function App() {
             />
             <Route path="/view-test" element={<ViewTestPage poseProvider={poseProvider} />} />
             <Route path="/model-health" element={<ModelHealthPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route
               path="/scenes"
               element={

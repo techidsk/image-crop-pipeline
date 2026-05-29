@@ -3,7 +3,7 @@ import base64
 from PIL import Image
 
 from .pose import Pose
-from .schemas import CropBox, CropPreset, CropResult
+from .schemas import CropBox, CropPreset, CropResult, ExportSettings
 
 BODY_BOUND_KEYPOINTS = {
     "nose",
@@ -271,7 +271,33 @@ def make_semantic_crop_box(image: Image.Image, pose: Pose, preset: CropPreset) -
     return left, round(top), max(1, round(width)), max(1, round(height))
 
 
-def make_crop(image: Image.Image, pose: Pose, preset: CropPreset) -> CropResult:
+def encode_crop_image(crop: Image.Image, source_image: Image.Image, settings: ExportSettings) -> tuple[bytes, str, str]:
+    buffer = BytesIO()
+    save_kwargs = {}
+    icc_profile = source_image.info.get("icc_profile")
+    if icc_profile:
+        save_kwargs["icc_profile"] = icc_profile
+
+    if settings.format == "jpeg":
+        if crop.mode in ("RGBA", "LA") or (crop.mode == "P" and "transparency" in crop.info):
+            background = Image.new("RGB", crop.size, (255, 255, 255))
+            background.paste(crop.convert("RGBA"), mask=crop.convert("RGBA").getchannel("A"))
+            crop = background
+        elif crop.mode != "RGB":
+            crop = crop.convert("RGB")
+        crop.save(buffer, format="JPEG", quality=settings.quality, optimize=True, **save_kwargs)
+        return buffer.getvalue(), "image/jpeg", "jpg"
+
+    crop.save(buffer, format="PNG", **save_kwargs)
+    return buffer.getvalue(), "image/png", "png"
+
+
+def make_crop(
+    image: Image.Image,
+    pose: Pose,
+    preset: CropPreset,
+    export_settings: ExportSettings | None = None,
+) -> CropResult:
     anchor = pose.point(preset.anchor)
     if anchor is None:
         raise ValueError(f"Missing pose anchor: {preset.anchor}")
@@ -338,12 +364,7 @@ def make_crop(image: Image.Image, pose: Pose, preset: CropPreset) -> CropResult:
 
     crop = image.crop((left, top, right, bottom)).resize((preset.width, preset.height), Image.Resampling.LANCZOS)
 
-    buffer = BytesIO()
-    save_kwargs = {}
-    icc_profile = image.info.get("icc_profile")
-    if icc_profile:
-        save_kwargs["icc_profile"] = icc_profile
-    crop.save(buffer, format="PNG", **save_kwargs)
+    encoded, mime_type, extension = encode_crop_image(crop, image, export_settings or ExportSettings())
 
     return CropResult(
         presetId=preset.id,
@@ -351,5 +372,7 @@ def make_crop(image: Image.Image, pose: Pose, preset: CropPreset) -> CropResult:
         width=preset.width,
         height=preset.height,
         box=source_box,
-        image=base64.b64encode(buffer.getvalue()).decode("ascii"),
+        image=base64.b64encode(encoded).decode("ascii"),
+        mimeType=mime_type,
+        extension=extension,
     )

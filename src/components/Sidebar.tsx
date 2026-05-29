@@ -6,6 +6,7 @@ import {
   ExperimentOutlined,
   EyeOutlined,
   ScissorOutlined,
+  SettingOutlined,
   ShopOutlined,
   SyncOutlined
 } from "@ant-design/icons";
@@ -29,7 +30,8 @@ type SidebarProps = {
 
 const COLLECTION_LABELS: Record<string, string> = {
   presets: "预设",
-  scenes: "场景"
+  scenes: "场景",
+  exportSettings: "导出"
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -70,7 +72,8 @@ export function Sidebar({
         label: "配置模块",
         children: [
           { key: "sceneList", icon: <ShopOutlined />, label: "场景 / 品牌" },
-          { key: "presetList", icon: <AppstoreOutlined />, label: "裁切预设" }
+          { key: "presetList", icon: <AppstoreOutlined />, label: "裁切预设" },
+          { key: "settings", icon: <SettingOutlined />, label: "导出设置" }
         ]
       },
       {

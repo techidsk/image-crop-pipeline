@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 ViewAngle = Literal["front", "side", "back"]
 ReviewStatus = Literal["pending_review", "approved", "rejected"]
+ExportFormat = Literal["png", "jpeg"]
 TAG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,23}$")
 
 
@@ -67,6 +68,8 @@ class CropResult(BaseModel):
     height: int
     box: CropBox
     image: str = ""
+    mimeType: str = "image/png"
+    extension: str = "png"
     outputPath: str | None = None
     imageUrl: str | None = None
 
@@ -177,3 +180,8 @@ class ReviewStatusUpdate(BaseModel):
 
 class RegenerateViewUpdate(BaseModel):
     viewAngle: ViewAngle
+
+
+class ExportSettings(BaseModel):
+    format: ExportFormat = "png"
+    quality: int = Field(default=100, ge=1, le=100)
