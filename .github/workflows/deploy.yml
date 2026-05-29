@@ -16,6 +16,8 @@ jobs:
       HTTPS_PROXY: http://10.31.0.181:7890
       HTTP_PROXY: http://10.31.0.181:7890
       ALL_PROXY: socks5://10.31.0.181:7890
+      no_proxy: localhost,127.0.0.1,::1,10.31.0.0/24,10.31.0.*
+      NO_PROXY: localhost,127.0.0.1,::1,10.31.0.0/24,10.31.0.*
 
     steps:
       - name: 检出代码
