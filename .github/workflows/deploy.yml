@@ -12,6 +12,13 @@ jobs:
   deploy:
     # 在测试服务器本机的 self-hosted runner 上执行
     runs-on: [self-hosted, image-crop-server]
+    env:
+      https_proxy: http://10.31.0.181:7890
+      http_proxy: http://10.31.0.181:7890
+      all_proxy: socks5://10.31.0.181:7890
+      HTTPS_PROXY: http://10.31.0.181:7890
+      HTTP_PROXY: http://10.31.0.181:7890
+      ALL_PROXY: socks5://10.31.0.181:7890
 
     steps:
       - name: 检出代码
