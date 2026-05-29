@@ -69,6 +69,7 @@ if [ "$Mode" = "full" ]; then
   docker compose up -d --build
 else
   log "远端 3/7 更新后端容器依赖和代码"
+  docker exec image-crop-backend sh -lc 'if command -v apt-get >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*; elif command -v yum >/dev/null 2>&1; then yum install -y libgomp; elif command -v apk >/dev/null 2>&1; then apk add --no-cache libgomp; else echo "no supported package manager found for libgomp" >&2; exit 1; fi'
   docker cp backend/requirements-paddle.txt image-crop-backend:/app/backend/requirements-paddle.txt
   docker exec image-crop-backend python -m pip install --no-cache-dir -r /app/backend/requirements-paddle.txt
   docker cp backend/app/. image-crop-backend:/app/backend/app/

@@ -1,4 +1,5 @@
 import base64
+import ctypes
 import ctypes.util
 import hashlib
 import importlib.util
@@ -166,8 +167,32 @@ def dependency_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
 
 
+def library_available(name: str, candidate_paths: list[str] | None = None) -> bool:
+    library_name = ctypes.util.find_library(name)
+    candidates = [library_name] if library_name else []
+    candidates.extend(candidate_paths or [])
+    for candidate in candidates:
+        try:
+            ctypes.CDLL(candidate)
+            return True
+        except OSError:
+            continue
+    return False
+
+
 def paddle_system_dependencies() -> dict[str, bool]:
-    return {"libgomp": ctypes.util.find_library("gomp") is not None}
+    return {
+        "libgomp": library_available(
+            "gomp",
+            [
+                "libgomp.so.1",
+                "/usr/lib/x86_64-linux-gnu/libgomp.so.1",
+                "/usr/lib/aarch64-linux-gnu/libgomp.so.1",
+                "/usr/lib64/libgomp.so.1",
+                "/usr/lib/libgomp.so.1",
+            ],
+        )
+    }
 
 
 def path_status(value: str | None) -> dict[str, object]:
