@@ -1,6 +1,7 @@
 import os
 import tarfile
 import tempfile
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,6 +46,8 @@ class PaddlePersonAttributeViewClassifier:
         self._predictor: Any | None = None
         self._input_name: str | None = None
         self._output_name: str | None = None
+        self._lock = threading.Lock()
+        self.last_error: str | None = None
 
     def classify(self, image: Image.Image, pose: Pose) -> ViewClassification | None:
         predictor = self._load_predictor()
@@ -54,41 +57,52 @@ class PaddlePersonAttributeViewClassifier:
         crop = person_crop(image, pose)
         try:
             array = preprocess_person_attribute(crop)
-            input_handle = predictor.get_input_handle(self._input_name)
-            input_handle.copy_from_cpu(array)
-            predictor.run()
-            output = predictor.get_output_handle(self._output_name).copy_to_cpu()
+            with self._lock:
+                input_handle = predictor.get_input_handle(self._input_name)
+                input_handle.copy_from_cpu(array)
+                predictor.run()
+                output = predictor.get_output_handle(self._output_name).copy_to_cpu()
             angle, confidence = parse_person_attribute_logits(output)
+            self.last_error = None
             return ViewClassification(angle=angle, provider="paddle_person_attribute", confidence=confidence)
-        except Exception:
+        except Exception as exc:
+            self.last_error = f"{type(exc).__name__}: {exc}"
             return None
 
     def _load_predictor(self):
-        if self._predictor is not None:
+        with self._lock:
+            if self._predictor is not None:
+                return self._predictor
+            try:
+                from paddle.inference import Config, create_predictor
+            except Exception as exc:
+                self.last_error = f"{type(exc).__name__}: {exc}"
+                return None
+            model_dir = ensure_person_attribute_model()
+            model_file = model_dir / "inference.pdmodel"
+            params_file = model_dir / "inference.pdiparams"
+            if not model_file.exists() or not params_file.exists():
+                self.last_error = f"missing model files in {model_dir}"
+                return None
+            try:
+                config = Config(str(model_file), str(params_file))
+                config.disable_gpu()
+                config.enable_mkldnn()
+                config.set_cpu_math_library_num_threads(int(os.getenv("PADDLE_CPU_THREADS", "4")))
+                config.disable_glog_info()
+                config.switch_ir_optim(True)
+                config.enable_memory_optim()
+                self._predictor = create_predictor(config)
+                self._input_name = self._predictor.get_input_names()[0]
+                self._output_name = self._predictor.get_output_names()[0]
+                self.last_error = None
+            except Exception as exc:
+                self.last_error = f"{type(exc).__name__}: {exc}"
+                return None
             return self._predictor
-        try:
-            from paddle.inference import Config, create_predictor
-        except Exception:
-            return None
-        model_dir = ensure_person_attribute_model()
-        model_file = model_dir / "inference.pdmodel"
-        params_file = model_dir / "inference.pdiparams"
-        if not model_file.exists() or not params_file.exists():
-            return None
-        try:
-            config = Config(str(model_file), str(params_file))
-            config.disable_gpu()
-            config.enable_mkldnn()
-            config.set_cpu_math_library_num_threads(int(os.getenv("PADDLE_CPU_THREADS", "4")))
-            config.disable_glog_info()
-            config.switch_ir_optim(True)
-            config.enable_memory_optim()
-            self._predictor = create_predictor(config)
-            self._input_name = self._predictor.get_input_names()[0]
-            self._output_name = self._predictor.get_output_names()[0]
-        except Exception:
-            return None
-        return self._predictor
+
+    def predictor_ready(self) -> bool:
+        return self._load_predictor() is not None and self._input_name is not None and self._output_name is not None
 
 
 class DensePoseViewClassifier:
@@ -98,6 +112,7 @@ class DensePoseViewClassifier:
         self._predictor: Any | None = None
         self._extractor: Any | None = None
         self._load_attempted = False
+        self.last_error: str | None = None
 
     def classify(self, image: Image.Image, pose: Pose) -> ViewClassification | None:
         predictor = self._load_predictor()
@@ -114,8 +129,11 @@ class DensePoseViewClassifier:
             if instances is None or len(instances) == 0:
                 return None
             part_counts = densepose_part_counts(self._extractor(instances))
-            return parse_densepose_part_counts(part_counts)
-        except Exception:
+            result = parse_densepose_part_counts(part_counts)
+            self.last_error = None if result is not None else "insufficient or ambiguous DensePose part pixels"
+            return result
+        except Exception as exc:
+            self.last_error = f"{type(exc).__name__}: {exc}"
             return None
 
     def _load_predictor(self):
@@ -128,6 +146,7 @@ class DensePoseViewClassifier:
         config_path = os.getenv("DENSEPOSE_CONFIG")
         weights_path = os.getenv("DENSEPOSE_WEIGHTS")
         if not config_path or not weights_path:
+            self.last_error = "DENSEPOSE_CONFIG or DENSEPOSE_WEIGHTS is not configured"
             return None
 
         try:
@@ -135,7 +154,8 @@ class DensePoseViewClassifier:
             from densepose.vis.extractor import DensePoseResultExtractor
             from detectron2.config import get_cfg
             from detectron2.engine import DefaultPredictor
-        except Exception:
+        except Exception as exc:
+            self.last_error = f"{type(exc).__name__}: {exc}"
             return None
 
         try:
@@ -147,7 +167,9 @@ class DensePoseViewClassifier:
             cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = float(os.getenv("DENSEPOSE_SCORE_THRESHOLD", "0.7"))
             self._predictor = DefaultPredictor(cfg)
             self._extractor = DensePoseResultExtractor()
-        except Exception:
+            self.last_error = None
+        except Exception as exc:
+            self.last_error = f"{type(exc).__name__}: {exc}"
             return None
         return self._predictor
 
@@ -175,6 +197,7 @@ def classify_view_with_trace(image: Image.Image, pose: Pose) -> tuple[ViewClassi
             {
                 "provider": "densepose",
                 "result": classification_trace_entry(densepose_result),
+                "error": densepose_view_classifier.last_error if densepose_result is None else None,
             }
         )
         if densepose_result is not None:
@@ -189,6 +212,7 @@ def classify_view_with_trace(image: Image.Image, pose: Pose) -> tuple[ViewClassi
             {
                 "provider": "paddle_person_attribute",
                 "result": classification_trace_entry(paddle_result),
+                "error": paddle_person_attribute_classifier.last_error if paddle_result is None else None,
             }
         )
         if paddle_result is not None:

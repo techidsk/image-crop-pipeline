@@ -158,12 +158,23 @@ export function ModelHealthPage() {
                 <HealthTag ok={status.view.paddle.dependencyAvailable} label={status.view.paddle.dependencyAvailable ? "已安装" : "缺失"} />
               </Descriptions.Item>
               <Descriptions.Item label="Paddle 模型">
-                <HealthTag ok={status.view.paddle.ready} label={status.view.paddle.ready ? "可用" : "缺失"} />
+                <HealthTag ok={status.view.paddle.ready} label={status.view.paddle.ready ? "可用" : "不可用"} />
+              </Descriptions.Item>
+              <Descriptions.Item label="Paddle Predictor">
+                <HealthTag
+                  ok={status.view.paddle.predictorReady}
+                  label={status.view.paddle.predictorReady ? "可初始化" : "初始化失败"}
+                />
               </Descriptions.Item>
               <Descriptions.Item label="Paddle 目录">{status.view.paddle.modelDir}</Descriptions.Item>
               <Descriptions.Item label="Paddle 文件">
                 model {yesNo(status.view.paddle.modelExists)} / params {yesNo(status.view.paddle.paramsExists)}
               </Descriptions.Item>
+              {status.view.paddle.lastError && (
+                <Descriptions.Item label="Paddle 错误" span={2}>
+                  <Text type="danger">{status.view.paddle.lastError}</Text>
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="DensePose 依赖">
                 densepose {yesNo(status.view.densepose.denseposeAvailable)} / detectron2 {yesNo(status.view.densepose.detectron2Available)}
               </Descriptions.Item>

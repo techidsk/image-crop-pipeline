@@ -173,6 +173,8 @@ export type ModelHealthStatus = {
       modelDir: string;
       modelExists: boolean;
       paramsExists: boolean;
+      predictorReady: boolean;
+      lastError: string | null;
       ready: boolean;
       confirmConfidence: number;
     };

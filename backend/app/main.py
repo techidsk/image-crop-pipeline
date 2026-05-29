@@ -61,7 +61,12 @@ from .training_store import (
     save_training_samples,
     save_upload_image,
 )
-from .view_classifier import classify_view, classify_view_with_trace, ensure_person_attribute_model
+from .view_classifier import (
+    classify_view,
+    classify_view_with_trace,
+    ensure_person_attribute_model,
+    paddle_person_attribute_classifier,
+)
 
 app = FastAPI(title="OpenPose Crop Pipeline")
 logger = logging.getLogger(__name__)
@@ -181,6 +186,8 @@ def model_health() -> dict[str, object]:
     ).expanduser()
     paddle_model = paddle_dir / "inference.pdmodel"
     paddle_params = paddle_dir / "inference.pdiparams"
+    paddle_files_ready = paddle_model.exists() and paddle_params.exists()
+    paddle_predictor_ready = paddle_files_ready and paddle_person_attribute_classifier.predictor_ready()
     view_providers = [
         value.strip()
         for value in os.getenv("VIEW_PROVIDER", "densepose,paddle").lower().replace(";", ",").split(",")
@@ -213,7 +220,9 @@ def model_health() -> dict[str, object]:
                 "modelDir": str(paddle_dir),
                 "modelExists": paddle_model.exists(),
                 "paramsExists": paddle_params.exists(),
-                "ready": dependency_available("paddle") and paddle_model.exists() and paddle_params.exists(),
+                "predictorReady": paddle_predictor_ready,
+                "lastError": paddle_person_attribute_classifier.last_error,
+                "ready": dependency_available("paddle") and paddle_predictor_ready,
                 "confirmConfidence": float(os.getenv("PADDLE_DIRECTION_CONFIRM_CONFIDENCE", "0.85")),
             },
             "densepose": {
