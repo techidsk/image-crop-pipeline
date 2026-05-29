@@ -5,6 +5,10 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m pip install --no-cache-dir --upgrade pip
 
 COPY backend/requirements.txt backend/requirements-onnx.txt backend/requirements-paddle.txt /app/backend/

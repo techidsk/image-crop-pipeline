@@ -1,4 +1,5 @@
 import base64
+import ctypes.util
 import hashlib
 import importlib.util
 import json
@@ -163,6 +164,10 @@ def dependency_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
 
 
+def paddle_system_dependencies() -> dict[str, bool]:
+    return {"libgomp": ctypes.util.find_library("gomp") is not None}
+
+
 def path_status(value: str | None) -> dict[str, object]:
     if not value:
         return {"path": "", "exists": False, "size": 0}
@@ -188,6 +193,7 @@ def model_health() -> dict[str, object]:
     paddle_params = paddle_dir / "inference.pdiparams"
     paddle_files_ready = paddle_model.exists() and paddle_params.exists()
     paddle_predictor_ready = paddle_files_ready and paddle_person_attribute_classifier.predictor_ready()
+    paddle_system_ready = paddle_system_dependencies()
     view_providers = [
         value.strip()
         for value in os.getenv("VIEW_PROVIDER", "densepose,paddle").lower().replace(";", ",").split(",")
@@ -217,12 +223,13 @@ def model_health() -> dict[str, object]:
             "paddle": {
                 "enabled": bool({"paddle", "paddle_person_attribute"} & set(view_providers)),
                 "dependencyAvailable": dependency_available("paddle"),
+                "systemDependencies": paddle_system_ready,
                 "modelDir": str(paddle_dir),
                 "modelExists": paddle_model.exists(),
                 "paramsExists": paddle_params.exists(),
                 "predictorReady": paddle_predictor_ready,
                 "lastError": paddle_person_attribute_classifier.last_error,
-                "ready": dependency_available("paddle") and paddle_predictor_ready,
+                "ready": dependency_available("paddle") and all(paddle_system_ready.values()) and paddle_predictor_ready,
                 "confirmConfidence": float(os.getenv("PADDLE_DIRECTION_CONFIRM_CONFIDENCE", "0.85")),
             },
             "densepose": {
@@ -286,6 +293,18 @@ def repair_model_health() -> dict[str, object]:
                 "target": "paddle_dependency",
                 "status": "manual_required",
                 "message": "缺少 paddlepaddle 依赖。Docker 部署请用最新 Dockerfile 完整重建镜像；本机部署请安装 backend/requirements-paddle.txt。",
+            }
+        )
+
+    paddle_system_ready = paddle_system_dependencies()
+    if all(paddle_system_ready.values()):
+        actions.append({"target": "paddle_system_dependency", "status": "ok", "message": "Paddle native 系统依赖已就绪"})
+    else:
+        actions.append(
+            {
+                "target": "paddle_system_dependency",
+                "status": "manual_required",
+                "message": "缺少 libgomp.so.1。Debian/Ubuntu 容器请安装 libgomp1 并重建镜像；CentOS/RHEL 安装 libgomp；Alpine 安装 libgomp。",
             }
         )
 

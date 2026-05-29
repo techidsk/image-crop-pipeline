@@ -157,6 +157,9 @@ export function ModelHealthPage() {
               <Descriptions.Item label="Paddle 依赖">
                 <HealthTag ok={status.view.paddle.dependencyAvailable} label={status.view.paddle.dependencyAvailable ? "已安装" : "缺失"} />
               </Descriptions.Item>
+              <Descriptions.Item label="Paddle native">
+                libgomp {yesNo(status.view.paddle.systemDependencies.libgomp)}
+              </Descriptions.Item>
               <Descriptions.Item label="Paddle 模型">
                 <HealthTag ok={status.view.paddle.ready} label={status.view.paddle.ready ? "可用" : "不可用"} />
               </Descriptions.Item>

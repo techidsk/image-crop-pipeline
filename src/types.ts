@@ -170,6 +170,9 @@ export type ModelHealthStatus = {
     paddle: {
       enabled: boolean;
       dependencyAvailable: boolean;
+      systemDependencies: {
+        libgomp: boolean;
+      };
       modelDir: string;
       modelExists: boolean;
       paramsExists: boolean;
